@@ -1,0 +1,32 @@
+[
+  {
+    "id": "pm_01",
+    "module_id": 1,
+    "title": "Writing Task 2 — Công thức mở bài & kết bài Band 8.5 (Education)",
+    "category": "Writing Notes",
+    "content_en": "While standardized assessment remains a widely defended pillar of academic meritocracy, an overreliance on rote metrics risks stifling epistemic curiosity and long-term cognitive flexibility.",
+    "notes_vi": "Ghi nhớ cấu trúc nhượng bộ While..., [mệnh đề chính] giúp tránh viết câu khẳng định một chiều. Dùng tốt cho mọi đề thi về thi cử & cải cách giáo dục.",
+    "tags": ["Writing Task 2", "Education", "Concession"],
+    "updated_at": "2026-11-18"
+  },
+  {
+    "id": "pm_02",
+    "module_id": 5,
+    "title": "Bài đọc tổng hợp — Carbon Pricing & Urban Climate Resilience",
+    "category": "Reading Article",
+    "content_en": "Municipalities that pair congestion pricing with vegetated transit corridors consistently report both measurable drops in particulate matter and higher pedestrian retail activity.",
+    "notes_vi": "Chú ý cặp paraphrase kinh điển trong Reading: 'particulate matter' = air pollutants; 'vegetated transit corridors' = tree-lined public transport lanes.",
+    "tags": ["Reading", "Environment", "Paraphrasing"],
+    "updated_at": "2026-11-19"
+  },
+  {
+    "id": "pm_03",
+    "module_id": 7,
+    "title": "Speaking Part 3 — Khung trả lời 3 bước về AI & Việc làm",
+    "category": "Speaking Cue",
+    "content_en": "Point: Generative AI is poised to augment rather than wholly displace skilled professionals. Reason: Routine synthesis is automated, freeing humans for nuanced ethical judgment. Example: Radiologists now combine diagnostic algorithms with patient-centred care.",
+    "notes_vi": "Giữ nhịp nói tự nhiên, nhấn trọng âm rõ ở 'augment', 'wholly displace', và 'ethical judgment'. Tránh ngập ngừng bằng 'That said,' hoặc 'In practical terms,'.",
+    "tags": ["Speaking Part 3", "Technology", "Hedging"],
+    "updated_at": "2026-11-19"
+  }
+]

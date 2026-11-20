@@ -1,0 +1,112 @@
+[
+  {
+    "id": "syn_inversion",
+    "module_id": 1,
+    "structure_tag_vi": "Đảo ngữ (Inversion)",
+    "structure_name_en": "Not only + Aux + S + V",
+    "meaning_vi": "Một chương trình học toàn diện không chỉ mài giũa tư duy phản biện mà còn nuôi dưỡng sự đồng cảm.",
+    "ordered_chunks": [
+      "Not only does",
+      "a holistic curriculum",
+      "cultivate critical thinking,",
+      "but it also",
+      "fosters emotional resilience."
+    ],
+    "scrambled_chunks": [
+      "but it also",
+      "cultivate critical thinking,",
+      "Not only does",
+      "fosters emotional resilience.",
+      "a holistic curriculum"
+    ],
+    "grammar_explanation_vi": "Cấu trúc đảo ngữ \"Not only + trợ động từ (does) + S + V nguyên thể, but S also + V\" tạo điểm nhấn học thuật mạnh mẽ cho tiêu chí Grammatical Range & Accuracy Band 8.5."
+  },
+  {
+    "id": "syn_participle",
+    "module_id": 5,
+    "structure_tag_vi": "Mệnh đề phân từ (Participle Clause)",
+    "structure_name_en": "Past Participle Opening",
+    "meaning_vi": "Đối mặt với suy thoái sinh thái không thể đảo ngược, các chính phủ phải đẩy nhanh quá trình khử carbon.",
+    "ordered_chunks": [
+      "Confronted with",
+      "irreversible ecological degradation,",
+      "governments must",
+      "accelerate efforts to",
+      "decarbonize heavy industry."
+    ],
+    "scrambled_chunks": [
+      "accelerate efforts to",
+      "Confronted with",
+      "decarbonize heavy industry.",
+      "governments must",
+      "irreversible ecological degradation,"
+    ],
+    "grammar_explanation_vi": "Rút gọn mệnh đề trạng ngữ bị động bằng quá khứ phân từ \"Confronted with + N\" giúp câu văn cô đọng, loại bỏ \"Because they are...\" rườm rà ở Band 6.0."
+  },
+  {
+    "id": "syn_cleft",
+    "module_id": 1,
+    "structure_tag_vi": "Câu chẻ (Cleft Sentence)",
+    "structure_name_en": "It is ... that ...",
+    "meaning_vi": "Chính sự thiếu hụt định hướng nghề nghiệp mới là nguyên nhân gây ra tình trạng thất nghiệp ở thanh niên.",
+    "ordered_chunks": [
+      "It is",
+      "the chronic underfunding",
+      "of vocational training",
+      "that exacerbates",
+      "youth unemployment."
+    ],
+    "scrambled_chunks": [
+      "that exacerbates",
+      "of vocational training",
+      "It is",
+      "youth unemployment.",
+      "the chronic underfunding"
+    ],
+    "grammar_explanation_vi": "Câu chẻ \"It is [cụm danh từ nhấn mạnh] that [V]\" tập trung trực tiếp lập luận vào nguyên nhân gốc rễ — kỹ thuật ăn điểm Coherence & Cohesion cực tốt trong Task 2."
+  },
+  {
+    "id": "syn_mixed_conditional",
+    "module_id": 5,
+    "structure_tag_vi": "Điều kiện hỗn hợp (Mixed Conditional)",
+    "structure_name_en": "Had + S + V3, S + would + V (now)",
+    "meaning_vi": "Giá như các quốc gia đã kiềm chế phát thải từ hàng thập kỷ trước, các đô thị ven biển ngày nay đã không phải đối mặt với ngập lụt nghiêm trọng.",
+    "ordered_chunks": [
+      "Had nations curbed",
+      "anthropogenic emissions",
+      "decades ago,",
+      "coastal cities would not",
+      "face severe flooding today."
+    ],
+    "scrambled_chunks": [
+      "coastal cities would not",
+      "decades ago,",
+      "Had nations curbed",
+      "face severe flooding today.",
+      "anthropogenic emissions"
+    ],
+    "grammar_explanation_vi": "Đảo ngữ điều kiện loại 3 kết hợp kết quả hiện tại (\"Had + S + V3, S + would + V today\") là cấu trúc vàng giúp giám khảo xếp ngay mức Band 8.5–9.0 về độ đa dạng ngữ pháp."
+  },
+  {
+    "id": "syn_concession",
+    "module_id": 0,
+    "structure_tag_vi": "Nhượng bộ học thuật (Concession)",
+    "structure_name_en": "Compelling though + S + V",
+    "meaning_vi": "Dù các lợi ích ngắn hạn của tự động hóa rất thuyết phục, hệ lụy xã hội dài hạn vẫn không thể bị xem nhẹ.",
+    "ordered_chunks": [
+      "Compelling though",
+      "the short-term gains",
+      "of automation may appear,",
+      "its long-term ramifications",
+      "cannot be overlooked."
+    ],
+    "scrambled_chunks": [
+      "its long-term ramifications",
+      "of automation may appear,",
+      "Compelling though",
+      "cannot be overlooked.",
+      "the short-term gains"
+    ],
+    "grammar_explanation_vi": "Đưa tính từ lên đầu trước \"though/as\" (\"Adj + though + S + V\") là phiên bản C2 sang trọng thay cho \"Although ... is compelling\", giúp lập luận hai chiều cực kỳ sắc bén."
+  }
+]

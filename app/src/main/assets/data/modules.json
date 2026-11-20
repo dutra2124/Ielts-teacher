@@ -1,0 +1,350 @@
+[
+  {
+    "id": 1,
+    "tier": "TIER_1_FOUNDATION",
+    "title_en": "Education & Lifelong Learning",
+    "title_vi": "Giáo dục & Học tập suốt đời",
+    "focus_vi": "Nâng cấp từ vựng trường lớp phổ thông sang cụm danh từ học thuật chính xác.",
+    "icon_key": "school",
+    "key_collocations": [
+      "holistic curriculum",
+      "foster critical thinking",
+      "pedagogical innovation"
+    ],
+    "daily_tips": [
+      {
+        "id": "m1_t1",
+        "category_vi": "Lexical Resource • Writing Task 2",
+        "tip_vi": "Thay vì lặp lại \"good education helps students\", hãy dùng động từ học thuật chỉ tác động nhận thức để chạm mốc Band 8.5.",
+        "upgrade_from_en": "good education helps students think better",
+        "academic_phrase_en": "a holistic curriculum cultivates analytical acumen"
+      },
+      {
+        "id": "m1_t2",
+        "category_vi": "Speaking Part 3 • Coherence",
+        "tip_vi": "Khi mở rộng ý về học tập suốt đời, dùng cấu trúc nhượng bộ (Concession) giúp câu trả lời cân bằng và tự nhiên hơn.",
+        "upgrade_from_en": "online courses are useful but hard to finish",
+        "academic_phrase_en": "While self-paced MOOCs democratize access, they demand sustained self-discipline"
+      }
+    ]
+  },
+  {
+    "id": 2,
+    "tier": "TIER_1_FOUNDATION",
+    "title_en": "Work & Modern Business",
+    "title_vi": "Công việc & Kinh doanh hiện đại",
+    "focus_vi": "Diễn đạt xu hướng làm việc linh hoạt, năng suất và văn hóa doanh nghiệp.",
+    "icon_key": "business",
+    "key_collocations": [
+      "hybrid work paradigm",
+      "occupational burnout",
+      "entrepreneurial resilience"
+    ],
+    "daily_tips": [
+      {
+        "id": "m2_t1",
+        "category_vi": "Lexical Resource • Task 2",
+        "tip_vi": "Tránh dùng cụm quá chung chung như \"work too hard and feel tired\". Thay bằng thuật ngữ chính xác về sức khỏe nghề nghiệp.",
+        "upgrade_from_en": "workers get very tired from long hours",
+        "academic_phrase_en": "prolonged overtime precipitates occupational burnout"
+      },
+      {
+        "id": "m2_t2",
+        "category_vi": "Speaking Part 2 • Fluency",
+        "tip_vi": "Khi mô tả công việc lý tưởng, chèn cụm \"strike a sustainable work-life equilibrium\" để tạo ấn tượng tự nhiên.",
+        "upgrade_from_en": "have a good balance between work and life",
+        "academic_phrase_en": "strike a sustainable work-life equilibrium"
+      }
+    ]
+  },
+  {
+    "id": 3,
+    "tier": "TIER_1_FOUNDATION",
+    "title_en": "Health & Lifestyle",
+    "title_vi": "Sức khỏe & Lối sống",
+    "focus_vi": "Phân biệt chuẩn xác y tế dự phòng, lối sống tĩnh tại và sức khỏe tinh thần.",
+    "icon_key": "health",
+    "key_collocations": [
+      "sedentary lifestyle",
+      "preventive healthcare",
+      "metabolic wellbeing"
+    ],
+    "daily_tips": [
+      {
+        "id": "m3_t1",
+        "category_vi": "Writing Task 2 • Precision",
+        "tip_vi": "Giám khảo đánh giá rất cao khả năng dùng danh từ hóa (Nominalization) khi phân tích nguyên nhân bệnh lý hiện đại.",
+        "upgrade_from_en": "people sit too much and get sick easily",
+        "academic_phrase_en": "the proliferation of sedentary lifestyles exacerbates chronic illnesses"
+      },
+      {
+        "id": "m3_t2",
+        "category_vi": "Reading • Paraphrasing",
+        "tip_vi": "Trong bài Reading, \"government health campaigns\" thường được paraphrase thành \"public health interventions\".",
+        "upgrade_from_en": "government health programs",
+        "academic_phrase_en": "state-led preventive healthcare interventions"
+      }
+    ]
+  },
+  {
+    "id": 4,
+    "tier": "TIER_1_FOUNDATION",
+    "title_en": "Tourism & Cultural Exchange",
+    "title_vi": "Du lịch & Giao lưu văn hóa",
+    "focus_vi": "Cân bằng lập luận giữa lợi ích kinh tế du lịch và bảo tồn bản sắc địa phương.",
+    "icon_key": "tourism",
+    "key_collocations": [
+      "cultural homogenization",
+      "sustainable ecotourism",
+      "preserve indigenous heritage"
+    ],
+    "daily_tips": [
+      {
+        "id": "m4_t1",
+        "category_vi": "Writing Task 2 • Nuance",
+        "tip_vi": "Thay vì viết \"tourism destroys local culture\", hãy diễn đạt sắc thái xói mòn dần dần bằng collocation chuẩn Band 8.5.",
+        "upgrade_from_en": "mass tourism destroys local traditions",
+        "academic_phrase_en": "unchecked mass tourism accelerates cultural homogenization"
+      },
+      {
+        "id": "m4_t2",
+        "category_vi": "Speaking Part 3 • Collocation",
+        "tip_vi": "Dùng \"cross-cultural empathy\" khi nói về lợi ích của việc du lịch quốc tế giúp câu trả lời sắc sảo hơn hẳn.",
+        "upgrade_from_en": "tourists understand other people better",
+        "academic_phrase_en": "immersive travel fosters genuine cross-cultural empathy"
+      }
+    ]
+  },
+  {
+    "id": 5,
+    "tier": "TIER_2_EXPANSION",
+    "title_en": "Environment & Climate Change",
+    "title_vi": "Môi trường & Biến đổi khí hậu",
+    "focus_vi": "Sử dụng động từ học thuật về giảm phát thải, chuyển dịch xanh và đa dạng sinh học.",
+    "icon_key": "environment",
+    "key_collocations": [
+      "mitigate carbon emissions",
+      "ecological degradation",
+      "renewable energy transition"
+    ],
+    "daily_tips": [
+      {
+        "id": "m5_t1",
+        "category_vi": "Lexical Resource • Band 8.0+",
+        "tip_vi": "Đừng chỉ dùng \"reduce pollution\". Hãy ghép động từ \"mitigate\" hoặc \"curb\" với \"greenhouse gas emissions\".",
+        "upgrade_from_en": "we must reduce air pollution quickly",
+        "academic_phrase_en": "concerted policies are imperative to mitigate carbon emissions"
+      },
+      {
+        "id": "m5_t2",
+        "category_vi": "Grammar Range • Inversion",
+        "tip_vi": "Dùng đảo ngữ với \"Only by + V-ing\" ở câu kết luận Task 2 giúp ăn trọn điểm Grammatical Range & Accuracy.",
+        "upgrade_from_en": "we can save nature only if countries work together",
+        "academic_phrase_en": "Only through binding global treaties can ecological degradation be halted"
+      }
+    ]
+  },
+  {
+    "id": 6,
+    "tier": "TIER_2_EXPANSION",
+    "title_en": "Urbanization & Infrastructure",
+    "title_vi": "Đô thị hóa & Hạ tầng",
+    "focus_vi": "Lập luận chặt chẽ về quy hoạch giao thông công cộng, mật độ dân số và đô thị xanh.",
+    "icon_key": "urban",
+    "key_collocations": [
+      "urban sprawl",
+      "transit-oriented development",
+      "alleviate traffic congestion"
+    ],
+    "daily_tips": [
+      {
+        "id": "m6_t1",
+        "category_vi": "Writing Task 2 • Urban Topics",
+        "tip_vi": "Cụm \"alleviate chronic traffic congestion\" chuẩn xác và tự nhiên hơn nhiều so với \"solve traffic jam problems\".",
+        "upgrade_from_en": "subways help solve traffic jams in big cities",
+        "academic_phrase_en": "integrated rail networks substantially alleviate chronic traffic congestion"
+      },
+      {
+        "id": "m6_t2",
+        "category_vi": "Task 1 Maps • Spatial Verbs",
+        "tip_vi": "Khi tả bản đồ đô thị hóa ở Task 1, dùng \"supplanted by\" và \"redeveloped into\" thay cho \"changed into\".",
+        "upgrade_from_en": "the old factory was changed into apartments",
+        "academic_phrase_en": "the former industrial complex was supplanted by residential high-rises"
+      }
+    ]
+  },
+  {
+    "id": 7,
+    "tier": "TIER_2_EXPANSION",
+    "title_en": "Technology & AI",
+    "title_vi": "Công nghệ & Trí tuệ nhân tạo",
+    "focus_vi": "Phân tích tự động hóa, quyền riêng tư dữ liệu và đạo đức thuật toán ở mức độ chuyên sâu.",
+    "icon_key": "tech",
+    "key_collocations": [
+      "algorithmic bias",
+      "workforce displacement",
+      "augment human capability"
+    ],
+    "daily_tips": [
+      {
+        "id": "m7_t1",
+        "category_vi": "Writing Task 2 • Hedging",
+        "tip_vi": "Khi dự đoán tác động của AI, dùng ngôn ngữ rào đón (Hedging) để lập luận khách quan thay vì khẳng định cực đoan.",
+        "upgrade_from_en": "AI will definitely take all human jobs",
+        "academic_phrase_en": "generative automation is poised to reshape rather than wholly displace labor markets"
+      },
+      {
+        "id": "m7_t2",
+        "category_vi": "Speaking Part 3 • Nuance",
+        "tip_vi": "Dùng \"double-edged sword\" kèm giải thích cụ thể hai mặt lợi–hại để tránh sáo rỗng.",
+        "upgrade_from_en": "AI has both good and bad sides",
+        "academic_phrase_en": "AI acts as a double-edged sword, augmenting productivity while raising privacy concerns"
+      }
+    ]
+  },
+  {
+    "id": 8,
+    "tier": "TIER_2_EXPANSION",
+    "title_en": "Media & The Arts",
+    "title_vi": "Truyền thông & Nghệ thuật",
+    "focus_vi": "Thảo luận về thuật toán mạng xã hội, tin giả và giá trị xã hội của nghệ thuật công cộng.",
+    "icon_key": "media",
+    "key_collocations": [
+      "algorithmic echo chambers",
+      "cultural enrichment",
+      "sensationalist journalism"
+    ],
+    "daily_tips": [
+      {
+        "id": "m8_t1",
+        "category_vi": "Lexical Resource • Media",
+        "tip_vi": "Cụm \"algorithmic echo chambers\" mô tả chính xác hiện tượng người dùng chỉ thấy quan điểm giống mình trên mạng xã hội.",
+        "upgrade_from_en": "social media makes people only see one opinion",
+        "academic_phrase_en": "curated feeds trap citizens inside algorithmic echo chambers"
+      },
+      {
+        "id": "m8_t2",
+        "category_vi": "Speaking Part 2 • Expressive",
+        "tip_vi": "Thay vì nói \"this painting is very nice\", hãy dùng tính từ giàu sức gợi như \"evocative\" hoặc \"thought-provoking\".",
+        "upgrade_from_en": "the exhibition was very interesting",
+        "academic_phrase_en": "the exhibition was deeply evocative and thought-provoking"
+      }
+    ]
+  },
+  {
+    "id": 9,
+    "tier": "TIER_3_MASTERY",
+    "title_en": "Macroeconomics & Globalization",
+    "title_vi": "Kinh tế vĩ mô & Toàn cầu hóa",
+    "focus_vi": "Làm chủ ngôn ngữ kinh tế: chuỗi cung ứng, bất bình đẳng thu nhập và chính sách tài khóa.",
+    "icon_key": "economy",
+    "key_collocations": [
+      "socioeconomic disparity",
+      "fiscal sustainability",
+      "global supply chain resilience"
+    ],
+    "daily_tips": [
+      {
+        "id": "m9_t1",
+        "category_vi": "Band 8.5 • Academic Register",
+        "tip_vi": "Thay \"the gap between rich and poor gets bigger\" bằng \"widen socioeconomic disparities\" để nâng tầm văn phong học thuật.",
+        "upgrade_from_en": "the gap between rich and poor is getting bigger",
+        "academic_phrase_en": "unregulated capital flows can widen socioeconomic disparities"
+      },
+      {
+        "id": "m9_t2",
+        "category_vi": "Task 1 Data • Precision",
+        "tip_vi": "Mô tả biến động kinh tế tinh tế hơn bằng \"plateaued\", \"experienced a marginal uptick\" thay cho \"went up a little\".",
+        "upgrade_from_en": "GDP went up a little then stayed the same",
+        "academic_phrase_en": "GDP recorded a marginal uptick before plateauing through Q4"
+      }
+    ]
+  },
+  {
+    "id": 10,
+    "tier": "TIER_3_MASTERY",
+    "title_en": "Law, Crime & Ethics",
+    "title_vi": "Pháp luật, Tội phạm & Đạo đức",
+    "focus_vi": "Phân biệt răn đe hình phạt (deterrence) với cải tạo tái hòa nhập (rehabilitation) ở chuẩn Band 8.5.",
+    "icon_key": "law",
+    "key_collocations": [
+      "rehabilitative justice",
+      "deterrent effect",
+      "recidivism rates"
+    ],
+    "daily_tips": [
+      {
+        "id": "m10_t1",
+        "category_vi": "Writing Task 2 • Legal Lexis",
+        "tip_vi": "Từ \"recidivism\" (tỷ lệ tái phạm) là từ khóa vàng giúp bài viết chủ đề tội phạm lập tức đạt độ chính xác của Band 8.5.",
+        "upgrade_from_en": "prisoners do crimes again after leaving jail",
+        "academic_phrase_en": "vocational rehabilitation programs markedly curtail recidivism rates"
+      },
+      {
+        "id": "m10_t2",
+        "category_vi": "Coherence • Referencing",
+        "tip_vi": "Dùng \"This punitive paradigm\" để liên kết đoạn mượt mà thay vì lặp lại \"This punishment method\".",
+        "upgrade_from_en": "this strict punishment method does not work well",
+        "academic_phrase_en": "this purely punitive paradigm rarely addresses underlying root causes"
+      }
+    ]
+  },
+  {
+    "id": 11,
+    "tier": "TIER_3_MASTERY",
+    "title_en": "Psychology & Human Behavior",
+    "title_vi": "Tâm lý học & Hành vi con người",
+    "focus_vi": "Phân tích thiên kiến nhận thức, động lực nội tại và ảnh hưởng xã hội bằng ngôn ngữ tinh tế.",
+    "icon_key": "psychology",
+    "key_collocations": [
+      "cognitive dissonance",
+      "intrinsic motivation",
+      "delayed gratification"
+    ],
+    "daily_tips": [
+      {
+        "id": "m11_t1",
+        "category_vi": "Band 8.5 • Precision",
+        "tip_vi": "Phân biệt \"intrinsic motivation\" (động lực nội tại) và \"extrinsic rewards\" (phần thưởng bên ngoài) để lập luận sâu sắc vượt trội.",
+        "upgrade_from_en": "people work better when they actually enjoy it",
+        "academic_phrase_en": "intrinsic motivation sustains long-term mastery far beyond extrinsic incentives"
+      },
+      {
+        "id": "m11_t2",
+        "category_vi": "Speaking Part 3 • Idiomatic",
+        "tip_vi": "Dùng cụm \"instant gratification\" khi nói về thói quen xem video ngắn giúp diễn đạt tự nhiên như người bản xứ.",
+        "upgrade_from_en": "young people want fun right away",
+        "academic_phrase_en": "short-form platforms condition users toward instant gratification"
+      }
+    ]
+  },
+  {
+    "id": 12,
+    "tier": "TIER_3_MASTERY",
+    "title_en": "Space Science & Future Frontiers",
+    "title_vi": "Khoa học Vũ trụ & Tương lai",
+    "focus_vi": "Tranh luận thuyết phục về ngân sách thám hiểm vũ trụ, công nghệ phụ trợ và tương lai nhân loại.",
+    "icon_key": "space",
+    "key_collocations": [
+      "technological spin-offs",
+      "interplanetary exploration",
+      "allocation of public funds"
+    ],
+    "daily_tips": [
+      {
+        "id": "m12_t1",
+        "category_vi": "Writing Task 2 • High-Band Ideas",
+        "tip_vi": "Lập luận đắt giá cho chủ đề vũ trụ: nhắc tới \"technological spin-offs\" (công nghệ phái sinh ứng dụng ngược lại cho Trái Đất).",
+        "upgrade_from_en": "space research makes useful inventions for daily life",
+        "academic_phrase_en": "aerospace funding yields transformative technological spin-offs for terrestrial medicine"
+      },
+      {
+        "id": "m12_t2",
+        "category_vi": "Grammar • Participle Clause",
+        "tip_vi": "Mở đầu câu bằng mệnh đề phân từ (Participle Clause) giúp câu văn cô đọng và nhịp điệu uyển chuyển chuẩn 8.5.",
+        "upgrade_from_en": "because we face climate risks, we should explore space",
+        "academic_phrase_en": "Confronted with planetary fragility, humanity increasingly views space research as long-term insurance"
+      }
+    ]
+  }
+]

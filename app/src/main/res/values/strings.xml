@@ -1,0 +1,212 @@
+<resources>
+    <string name="app_name">ApexIELTS 8.5</string>
+
+    <!-- Bottom Navigation Tabs -->
+    <string name="tab_roadmap">Lộ trình</string>
+    <string name="tab_learn">Học</string>
+    <string name="tab_practice">Luyện</string>
+    <string name="tab_exam">Thi</string>
+    <string name="tab_review">Sửa</string>
+
+    <!-- Dashboard Header & Teacher -->
+    <string name="daily_tip_title">Mẹo Band 8.5 hôm nay</string>
+    <string name="next_tip_button">Mẹo khác</string>
+    <string name="streak_days_label">%1$d ngày</string>
+    <string name="reminder_on_toast">Đã bật nhắc học hằng ngày lúc 20:00</string>
+    <string name="reminder_off_toast">Đã tắt nhắc học hằng ngày</string>
+    <string name="reminder_cd">Nhắc nhở học tập hằng ngày</string>
+    <string name="teacher_cd">Trợ giảng AI ApexIELTS đang hướng dẫn</string>
+
+    <!-- Band Progress Card -->
+    <string name="band_progress_title">Lộ trình nâng Band mục tiêu</string>
+    <string name="current_band_label">Band hiện tại</string>
+    <string name="target_band_label">Mục tiêu</string>
+    <string name="modules_completed_label">Hoàn thành %1$d / %2$d chủ đề</string>
+    <string name="active_module_prefix">Đang lọc nội dung:</string>
+    <string name="start_learning_cta">Vào học ngay</string>
+
+    <!-- Roadmap Section -->
+    <string name="roadmap_section_title">Bản đồ 12 chủ đề IELTS thực chiến</string>
+    <string name="roadmap_section_subtitle">Chạm vào một chủ đề để lọc toàn bộ bài học, luyện tập &amp; đề thi</string>
+    <string name="module_active_badge">Đang chọn</string>
+    <string name="module_completed_badge">Đã hoàn thành</string>
+    <string name="mark_completed_action">Đánh dấu hoàn thành</string>
+    <string name="mark_in_progress_action">Học lại chủ đề</string>
+    <string name="sample_vocab_label">Cụm từ Band 8.5 tiêu biểu:</string>
+
+    <!-- Placeholder Tabs 2-5 -->
+    <string name="placeholder_step_badge">Sắp ra mắt ở bước tiếp theo</string>
+    <string name="placeholder_back_to_roadmap">Quay lại Lộ trình</string>
+    <string name="placeholder_filtered_by">Đang đồng bộ theo chủ đề</string>
+
+    <string name="learn_placeholder_title">Học từ vựng &amp; Cấu trúc Band 8.5</string>
+    <string name="learn_placeholder_desc">Thẻ ghi nhớ Collocations học thuật, Paraphrasing chuẩn giám khảo và ví dụ ngữ cảnh thực tế dành riêng cho chủ đề đang chọn.</string>
+
+    <string name="practice_placeholder_title">Luyện phản xạ 4 kỹ năng chuyên sâu</string>
+    <string name="practice_placeholder_desc">Bài tập Listening, Reading, Speaking Cue Card và Writing Task 2 theo ngữ cảnh thực tế giúp chuyển hóa kiến thức thành điểm số.</string>
+
+    <string name="exam_placeholder_title">Phòng thi thử IELTS chuẩn thời gian thực</string>
+    <string name="exam_placeholder_desc">Mô phỏng áp lực phòng thi thật với đồng hồ đếm ngược, phân bổ câu hỏi theo chuẩn Cambridge và dự đoán Band Score chính xác.</string>
+
+    <string name="review_placeholder_title">Sửa bài chi tiết cùng AI Examiner</string>
+    <string name="review_placeholder_desc">Chấm chữa từng câu theo 4 tiêu chí IELTS (TR, CC, LR, GRA), nâng cấp diễn đạt Band 6.0 lên Band 8.5 và lưu sổ tay lỗi sai.</string>
+
+    <!-- Daily Study Habit Tracker -->
+    <string name="daily_habit_card_title">Thói quen học tập hôm nay</string>
+    <string name="daily_habit_subtitle">Hoàn thành mục tiêu nhỏ mỗi ngày để bứt phá Band 8.5</string>
+    <string name="weekly_calendar_title">Lịch duy trì 7 ngày (T2–CN)</string>
+    <string name="daily_goal_done_badge">Hoàn thành 100%</string>
+    <string name="next_reminder_prefix">Nhắc học:</string>
+    <string name="reminders_paused_label">Đang tắt nhắc học</string>
+
+    <!-- Custom Notification Scheduler Bottom Sheet -->
+    <string name="notif_sheet_title">Lịch nhắc học thông minh</string>
+    <string name="notif_sheet_subtitle">Tùy chỉnh khung giờ &amp; phong cách nhắc nhở từ Trợ giảng AI</string>
+    <string name="notif_master_title">Bật nhắc học hằng ngày</string>
+    <string name="notif_master_desc">Tự động gửi thông báo đúng khung giờ bạn chọn</string>
+    <string name="notif_permission_title">Quyền thông báo thiết bị</string>
+    <string name="notif_permission_granted">Đã bật quyền thông báo hệ thống Android</string>
+    <string name="notif_permission_missing">Cấp quyền để nhận thông báo ngay cả khi đóng ứng dụng</string>
+    <string name="notif_permission_btn">Cấp quyền ngay</string>
+    <string name="notif_slots_section_title">Khung giờ nhắc học trong ngày</string>
+    <string name="notif_add_slot_btn">Thêm khung giờ</string>
+    <string name="notif_empty_slots_hint">Chưa có khung giờ nào. Chạm \"Thêm khung giờ\" để tạo lịch nhắc mới.</string>
+    <string name="notif_repeat_days_title">Ngày lặp lại trong tuần</string>
+    <string name="notif_tone_section_title">Giọng điệu Trợ giảng AI</string>
+    <string name="notif_send_test_btn">Gửi thông báo thử ngay</string>
+    <string name="notif_dialog_add_title">Thêm khung giờ nhắc học</string>
+    <string name="notif_dialog_edit_title">Chỉnh sửa khung giờ</string>
+    <string name="notif_dialog_label_hint">Nội dung nhắc (VD: Ôn Writing Task 2)</string>
+    <string name="notif_dialog_save">Lưu lịch</string>
+    <string name="notif_dialog_cancel">Hủy</string>
+
+    <!-- Push Notification Banner -->
+    <string name="push_banner_now">Bây giờ</string>
+    <string name="push_banner_tap_cta">Chạm để mở tab Học ngay</string>
+    <string name="push_banner_dismiss_cd">Đóng thông báo</string>
+
+    <!-- Tab 2: Learn (Học) -->
+    <string name="learn_header_title">Phòng học C1–C2 Chuyên sâu</string>
+    <string name="learn_flip_hint">Chạm vào thẻ để lật xem Ngữ pháp &amp; Lỗi Band 6.0</string>
+    <string name="learn_flip_back_hint">Chạm để quay lại mặt trước (Phát âm &amp; IPA)</string>
+    <string name="learn_pronunciation_check">Kiểm tra phát âm</string>
+    <string name="learn_listening_now">Đang lắng nghe giọng bạn...</string>
+    <string name="learn_pitfall_title">Lỗi Band 6.0 hay gặp</string>
+    <string name="learn_add_srs">Lưu ôn SRS</string>
+    <string name="learn_in_srs">Đang trong SRS</string>
+
+    <!-- Sub-tab 2: AI Sentence Builder -->
+    <string name="ai_sentence_title">Đặt câu ngữ cảnh cùng Gemini AI</string>
+    <string name="ai_sentence_subtitle">Viết 1 câu tiếng Anh dùng từ mục tiêu để nhận chấm chữa &amp; nâng cấp Band 8.5+</string>
+    <string name="ai_sentence_placeholder">VD: Universities should adopt innovative pedagogical approaches...</string>
+    <string name="ai_sentence_submit">Chấm &amp; Nâng cấp Band 8.5+</string>
+    <string name="ai_sentence_upgraded_label">Câu nâng cấp chuẩn Band 8.5+</string>
+
+    <!-- Sub-tab 3: Syntax Reordering -->
+    <string name="syntax_title">Sắp xếp cấu trúc câu Band 8.5+</string>
+    <string name="syntax_subtitle">Chạm các cụm từ theo đúng trật tự học thuật để tạo câu hoàn chỉnh</string>
+    <string name="syntax_check_btn">Kiểm tra câu</string>
+    <string name="syntax_reset_btn">Xếp lại</string>
+    <string name="syntax_next_btn">Câu tiếp theo</string>
+
+    <!-- Sub-tab 4: Game & SRS -->
+    <string name="game_start_btn">Bắt đầu chơi (45s)</string>
+    <string name="game_replay_btn">Chơi lại vòng mới</string>
+    <string name="srs_queue_title">Hàng chờ ôn tập SRS</string>
+    <string name="srs_queue_empty">Tuyệt vời! Bạn chưa có từ nào bị sai cần ôn lại trong hàng chờ SRS.</string>
+    <string name="srs_mastered_btn">Đã nhớ</string>
+
+    <!-- Tab 3: Practice (Luyện) -->
+    <string name="practice_header_title">Phòng Luyện 4 Kỹ Năng Band 8.5</string>
+    <string name="practice_fab_syntax">Soi Ngữ pháp</string>
+    <string name="practice_fab_syntax_active">Đang soi câu</string>
+    <string name="practice_fab_hints">Gợi ý 3 cấp</string>
+    <string name="practice_fab_vocab">Từ vựng 8.5+</string>
+    <string name="practice_inspect_banner">Đang bật Soi Ngữ pháp: Chạm trực tiếp vào bất kỳ câu phức nào bên dưới để Gemini AI bóc tách!</string>
+    <string name="practice_reading_check">Kiểm tra đáp án &amp; Keyword Mapping</string>
+    <string name="practice_reading_reset">Làm lại bài đọc</string>
+    <string name="practice_listening_play">Phát bài nghe</string>
+    <string name="practice_listening_stop">Dừng phát</string>
+    <string name="practice_dictation_mode">Smart Dictation</string>
+    <string name="practice_comprehension_mode">Nghe hiểu IELTS</string>
+    <string name="practice_speaking_record">Thu âm trả lời</string>
+    <string name="practice_speaking_stop">Dừng thu âm</string>
+    <string name="practice_speaking_submit">Chấm Speaking cùng Gemini AI</string>
+    <string name="practice_writing_submit">Chấm Writing cùng Gemini AI</string>
+    <string name="practice_outline_title">Khung lập dàn ý nhanh</string>
+    <string name="practice_syntax_sheet_title">Soi Ngữ pháp Câu (AI Syntax Breakdown)</string>
+    <string name="practice_hints_sheet_title">Hệ thống Gợi ý 3 Cấp độ</string>
+    <string name="practice_vocab_sheet_title">Từ vựng &amp; Idioms Band 8.5+</string>
+
+    <!-- Tab 4: Exam (Thi) & CD-IELTS Mock Room -->
+    <string name="exam_hub_title">Trung tâm Thi thử Chuẩn CD-IELTS</string>
+    <string name="exam_hub_subtitle">Đề thi Cambridge/Actual chuẩn thời gian thực &amp; Số hóa đề cá nhân bằng AI</string>
+    <string name="exam_section_bank">Kho đề Thực tế</string>
+    <string name="exam_section_importer">Nạp đề &amp; Thư viện</string>
+    <string name="exam_start_cta">Bắt đầu thi</string>
+    <string name="exam_ai_parse_btn">Số hóa bằng AI (AI Exam Parser)</string>
+    <string name="exam_download_sample_json">Tải file mẫu JSON</string>
+    <string name="exam_pick_doc_btn">Chọn file PDF / DOCX / TXT / JSON</string>
+    <string name="exam_pick_audio_btn">Đính kèm Audio MP3 / WAV</string>
+    <string name="exam_save_library_btn">Lưu vào Thư viện đề cá nhân</string>
+    <string name="exam_submit_btn">Nộp bài</string>
+    <string name="exam_strict_mode_badge">STRICT MODE • KHÔNG GỢI Ý</string>
+    <string name="exam_high_contrast_label">HC</string>
+
+    <!-- Tab 5: Review & Fix (Sửa) -->
+    <string name="review_header_title">Chẩn đoán Band &amp; Sửa lỗi Chuyên sâu</string>
+    <string name="review_header_subtitle">Khép kín vòng học: Soi lỗi bài thi → Đưa vào SRS → Luyện lại kỹ năng yếu</string>
+    <string name="review_diff_title">So sánh Bản gốc vs. Nâng cấp Band 8.5+</string>
+    <string name="review_diff_original_label">Bài làm gốc (Gạch chân đỏ lỗi yếu)</string>
+    <string name="review_diff_upgraded_label">Phiên bản Band 8.5+ (Tô xanh nâng cấp)</string>
+    <string name="review_diff_ai_btn">Tạo bản nâng cấp Band 8.5+ bằng Gemini AI</string>
+    <string name="review_error_log_title">Nhật ký lỗi sai (Error Log → Action Loop)</string>
+    <string name="review_push_srs_btn">Đưa từ sai vào SRS</string>
+    <string name="review_in_srs_btn">Đã đưa vào SRS</string>
+    <string name="review_practice_weak_btn">Luyện lại dạng bài yếu</string>
+
+    <!-- Global Theme Manager (Dark Mode for CD-IELTS & Late-Night Study) -->
+    <string name="theme_manager_cd">Quản lý giao diện &amp; Chế độ Tối</string>
+    <string name="theme_sheet_title">Quản lý Giao diện &amp; Chế độ Tối</string>
+    <string name="theme_sheet_subtitle">Tối ưu thị lực cho phòng thi CD-IELTS và các buổi ôn luyện ban đêm</string>
+    <string name="theme_auto_exam_title">Tự động bật Dark Mode trong Phòng thi CD-IELTS</string>
+    <string name="theme_auto_exam_desc">Chuyển ngay sang nền than chì dịu mắt khi vào thi thử dù ban ngày đang dùng giao diện Sáng</string>
+    <string name="theme_preview_card_title">Xem trước trực tiếp trên thẻ học</string>
+    <string name="theme_done_btn">Xong</string>
+
+    <!-- Offline-First Hybrid Architecture & Google Sheets Cloud Sync -->
+    <string name="settings_gear_cd">Cài đặt &amp; Đồng bộ Cloud Database</string>
+    <string name="settings_sheet_title">Cài đặt &amp; Đồng bộ Dữ liệu</string>
+    <string name="settings_sheet_subtitle">Kiến trúc Offline-First: JSON cục bộ + SQLite + Google Sheets Cloud</string>
+    <string name="sync_panel_title">Đồng bộ Cloud Database</string>
+    <string name="sync_sheet_url_label">Dán liên kết Google Sheet công khai (URL hoặc Sheet ID)</string>
+    <string name="sync_sheet_url_placeholder">https://docs.google.com/spreadsheets/d/...</string>
+    <string name="sync_now_btn">Đồng bộ dữ liệu ngay</string>
+    <string name="sync_syncing_btn">Đang đồng bộ 5 tab Google Sheets...</string>
+    <string name="sync_status_online">Trực tuyến • Sẵn sàng đồng bộ</string>
+    <string name="sync_status_offline">Ngoại tuyến • Đang chạy 100% Offline</string>
+    <string name="backup_section_title">Sao lưu &amp; Khôi phục toàn bộ (.json)</string>
+    <string name="backup_export_btn">Xuất sao lưu (.json)</string>
+    <string name="backup_restore_btn">Khôi phục (.json)</string>
+    <string name="audio_vault_title">Kho Audio Offline (MP3/WAV)</string>
+    <string name="audio_vault_import_btn">Lưu Audio MP3/WAV</string>
+    <string name="personal_materials_title">Tài liệu tự học cá nhân</string>
+    <string name="personal_materials_add_btn">Thêm tài liệu</string>
+
+    <!-- Personal Library & Self-Study Hub + In-App CSV/JSON Bulk Importer -->
+    <string name="library_quick_access_btn">Tự học &amp; Tài liệu</string>
+    <string name="library_hub_title">Tài liệu cá nhân &amp; Tự học</string>
+    <string name="library_hub_subtitle">Ghi chú, bài đọc, Flashcard &amp; công cụ AI Band 8.5+</string>
+    <string name="library_ai_summarize_btn">AI tóm tắt &amp; Rút từ Band 8.5+</string>
+    <string name="importer_sheet_title">Nhập dữ liệu CSV / JSON hàng loạt</string>
+    <string name="importer_sheet_subtitle">Hỗ trợ tiếng Việt UTF-8, kiểm tra bảng xem trước trước khi lưu SQLite</string>
+    <string name="importer_pick_file_btn">Nhập file CSV / JSON từ thiết bị</string>
+    <string name="importer_sample_csv_btn">File mẫu CSV</string>
+    <string name="importer_sample_json_btn">File mẫu JSON</string>
+
+    <!-- Diligence & Progress Dashboard + Voice Encouragement -->
+    <string name="tab1_switch_roadmap">Lộ trình 12 Module</string>
+    <string name="tab1_switch_dashboard">Dashboard Chăm chỉ</string>
+    <string name="dashboard_listen_coach_btn">Nghe cô giáo động viên</string>
+    <string name="dashboard_auto_greet_toggle">Tự động chào &amp; động viên khi mở Dashboard</string>
+</resources>
