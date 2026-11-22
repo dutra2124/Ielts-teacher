@@ -113,15 +113,8 @@ fun StudyTabPlaceholderScreen(
             titleRes = R.string.exam_placeholder_title,
             descRes = R.string.exam_placeholder_desc,
             mood = TeacherMood.ENCOURAGING,
-            teacherLineVi = "Giữ vững tâm lý nhé! Phòng thi thử chuẩn Cambridge cho chủ đề \"${activeModule.titleEn}\" sẽ giúp bạn bứt phá Band 8.5.",
-            stepLabelVi = "Bước 4 / 5 • Thi thử áp lực thật"
-        )
-        StudyTab.REVIEW -> PlaceholderMeta(
-            titleRes = R.string.review_placeholder_title,
-            descRes = R.string.review_placeholder_desc,
-            mood = TeacherMood.CHEERING,
-            teacherLineVi = "Tuyệt lắm! Khu vực chấm chữa chi tiết 4 tiêu chí sẽ giúp nâng cấp mọi bài làm chủ đề \"${activeModule.titleEn}\" lên Band 8.5.",
-            stepLabelVi = "Bước 5 / 5 • Chữa lỗi & Nâng Band"
+            teacherLineVi = "Giữ vững tâm lý nhé! Phòng thi thử & Chữa đề chuẩn Cambridge cho chủ đề \"${activeModule.titleEn}\" sẽ giúp bạn bứt phá Band 8.5.",
+            stepLabelVi = "Bước 4 / 4 • Đề thi & Chữa đề"
         )
         StudyTab.ROADMAP -> PlaceholderMeta(
             titleRes = R.string.learn_placeholder_title,
@@ -227,8 +220,8 @@ fun StudyTabPlaceholderScreen(
             }
         }
 
-        // Newly Submitted Mock Exam Result Card on Tab 5 (Sửa)
-        if (tab == StudyTab.REVIEW && latestExamAttempt != null) {
+        // Newly Submitted Mock Exam Result Card on Tab 4 (Đề thi)
+        if (tab == StudyTab.EXAM && latestExamAttempt != null) {
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -411,7 +404,6 @@ fun StudyTabPlaceholderScreen(
                             tint = ElectricIndigo,
                             isActive = true
                         )
-                        StudyTab.REVIEW -> AnimatedStreakFlame(size = 42.dp)
                         StudyTab.ROADMAP -> AnimatedFloatingGradCap(size = 56.dp)
                     }
                 }

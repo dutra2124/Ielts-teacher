@@ -237,7 +237,7 @@ class ApexHybridRepository(private val context: Context) {
 
     suspend fun exportFullBackupJson(sheetUrl: String): String = withContext(Dispatchers.IO) {
         val root = JSONObject().apply {
-            put("app", "ApexIELTS 8.5")
+            put("app", "Master Ielts")
             put("schema_version", 1)
             put("exported_at", SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).format(Date()))
             put("google_sheet_url", sheetUrl)
@@ -433,7 +433,7 @@ class ApexHybridRepository(private val context: Context) {
             }
 
             if (count == 0) {
-                error("Tệp JSON không chứa dữ liệu ApexIELTS hợp lệ (thiếu modules / vocabulary / exams / personal_materials).")
+                error("Tệp JSON không chứa dữ liệu Master Ielts hợp lệ (thiếu modules / vocabulary / exams / personal_materials).")
             }
 
             addStudyLogInternal("Backup", "Khôi phục $count bản ghi từ tệp sao lưu (.json)")

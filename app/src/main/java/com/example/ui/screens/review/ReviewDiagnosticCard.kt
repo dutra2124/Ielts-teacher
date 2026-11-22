@@ -62,6 +62,7 @@ import com.example.ui.theme.IndigoOnSurface
 import com.example.ui.theme.InkMuted
 import com.example.ui.theme.InkPrimary
 import com.example.ui.theme.InkSecondary
+import com.example.ui.theme.LocalAdaptiveLayoutInfo
 import com.example.ui.theme.PlusJakartaSansFontFamily
 import com.example.ui.theme.RoseDiff
 import com.example.ui.theme.RoseDiffLight
@@ -96,10 +97,12 @@ fun ReviewDiagnosticCard(
 
     val teacherMood = if (report.bands.meetsTarget) TeacherMood.CHEERING else TeacherMood.ENCOURAGING
 
+    val layoutInfo = LocalAdaptiveLayoutInfo.current
+
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = layoutInfo.horizontalPadding),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         // Overall Band + 4 Skill Scores + AI Teacher Diagnostic Card

@@ -1,12 +1,12 @@
 <resources>
-    <string name="app_name">ApexIELTS 8.5</string>
+    <string name="app_name">Master Ielts</string>
 
     <!-- Bottom Navigation Tabs -->
     <string name="tab_roadmap">Lộ trình</string>
     <string name="tab_learn">Học</string>
     <string name="tab_practice">Luyện</string>
-    <string name="tab_exam">Thi</string>
-    <string name="tab_review">Sửa</string>
+    <string name="tab_exam">Đề thi</string>
+    <string name="tab_review">Chữa đề</string>
 
     <!-- Dashboard Header & Teacher -->
     <string name="daily_tip_title">Mẹo Band 8.5 hôm nay</string>
@@ -15,7 +15,7 @@
     <string name="reminder_on_toast">Đã bật nhắc học hằng ngày lúc 20:00</string>
     <string name="reminder_off_toast">Đã tắt nhắc học hằng ngày</string>
     <string name="reminder_cd">Nhắc nhở học tập hằng ngày</string>
-    <string name="teacher_cd">Trợ giảng AI ApexIELTS đang hướng dẫn</string>
+    <string name="teacher_cd">Trợ giảng AI Master Ielts đang hướng dẫn</string>
 
     <!-- Band Progress Card -->
     <string name="band_progress_title">Lộ trình nâng Band mục tiêu</string>
@@ -209,4 +209,42 @@
     <string name="tab1_switch_dashboard">Dashboard Chăm chỉ</string>
     <string name="dashboard_listen_coach_btn">Nghe cô giáo động viên</string>
     <string name="dashboard_auto_greet_toggle">Tự động chào &amp; động viên khi mở Dashboard</string>
+
+    <!-- Security, App Check & Sideload Gemini Fallback -->
+    <string name="security_appcheck_title">Bảo mật &amp; Firebase App Check</string>
+    <string name="security_copy_debug_token_btn">Sao chép Debug Token</string>
+    <string name="security_gemini_key_title">Gemini API Key cá nhân (Dự phòng Sideload)</string>
+    <string name="security_gemini_key_save_btn">Lưu Key</string>
+    <string name="security_gemini_key_clear_btn">Xóa</string>
+
+    <!-- Authentication & Login Screen -->
+    <string name="auth_brand_tagline">Lộ trình IELTS 6.0 → 8.5 • Học &amp; Luyện thi thông minh</string>
+    <string name="auth_tab_signin">Đăng nhập (Sign In)</string>
+    <string name="auth_tab_signup">Đăng ký (Sign Up)</string>
+    <string name="auth_google_btn">Đăng nhập bằng tài khoản Google</string>
+    <string name="auth_google_note">Đăng nhập bằng tài khoản Google để kích hoạt đồng bộ đám mây (Cloud Sync) và toàn bộ tính năng chấm chữa AI trong Master Ielts.</string>
+    <string name="auth_account_avatar_cd">Mở menu tài khoản Master Ielts</string>
+
+    <!-- Account Sidebar Drawer -->
+    <string name="drawer_google_connected">Đã kết nối Google AI</string>
+    <string name="drawer_google_disconnected">Chưa đăng nhập Google</string>
+    <string name="drawer_menu_google_title">Đăng nhập / Tài khoản Google</string>
+    <string name="drawer_menu_google_sub">Google Account for AI &amp; Cloud</string>
+    <string name="drawer_menu_self_study_title">Tự học</string>
+    <string name="drawer_menu_self_study_sub">Personal Self-Study Library</string>
+    <string name="drawer_menu_add_materials_title">Thêm tài liệu</string>
+    <string name="drawer_menu_add_materials_sub">PDF, DOCX, CSV, JSON, Audio &amp; AI</string>
+    <string name="drawer_menu_settings_title">Cài đặt</string>
+    <string name="drawer_menu_settings_sub">Thông báo, Google Sheet, Giao diện &amp; Reset</string>
+    <string name="drawer_menu_security_title">Bảo mật</string>
+    <string name="drawer_menu_security_sub">Mật khẩu, Khóa PIN/Sinh trắc, App Check &amp; Backup</string>
+    <string name="drawer_logout_btn">Đăng xuất (Log Out)</string>
+
+    <!-- Settings & Security -->
+    <string name="settings_reset_progress_title">Đặt lại tiến độ học tập (Reset Progress)</string>
+    <string name="settings_reset_progress_btn">Đặt lại tiến độ</string>
+    <string name="security_sheet_title">Bảo mật &amp; Quyền riêng tư</string>
+    <string name="security_sheet_subtitle">Quản lý mật khẩu, Khóa ứng dụng, App Check &amp; Sao lưu JSON</string>
+    <string name="applock_title">Khóa ứng dụng Master Ielts</string>
+    <string name="applock_subtitle">Nhập mã PIN 4 chữ số để tiếp tục phiên học</string>
 </resources>

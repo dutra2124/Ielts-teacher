@@ -16,16 +16,18 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowForwardIos
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AudioFile
 import androidx.compose.material.icons.rounded.CheckCircle
@@ -34,15 +36,17 @@ import androidx.compose.material.icons.rounded.CloudDone
 import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material.icons.rounded.CloudSync
 import androidx.compose.material.icons.rounded.DeleteOutline
-import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.History
-import androidx.compose.material.icons.rounded.MenuBook
+import androidx.compose.material.icons.rounded.ImageSearch
+import androidx.compose.material.icons.rounded.NotificationsActive
+import androidx.compose.material.icons.rounded.Palette
+import androidx.compose.material.icons.rounded.PhotoCamera
+import androidx.compose.material.icons.rounded.RestartAlt
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Storage
-import androidx.compose.material.icons.rounded.Upload
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -61,16 +65,15 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -78,11 +81,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
-import com.example.data.ExamScoringHelper
+import com.example.auth.UserAccountProfile
+import com.example.data.NotificationPreferences
+import com.example.data.ReminderTone
+import com.example.data.StreakVisualStyle
 import com.example.data.local.AudioBlobRecord
 import com.example.data.local.CloudSyncUiState
 import com.example.data.local.LocalStorageCounts
-import com.example.data.local.PersonalMaterial
 import com.example.data.local.StudyLogEntry
 import com.example.data.sync.GoogleSheetsSyncService
 import com.example.ui.theme.CardBorderSoft
@@ -106,11 +111,9 @@ import com.example.ui.theme.RoseAlert
 import com.example.ui.theme.RoseDiffLight
 import com.example.ui.theme.SurfaceCanvas
 import com.example.ui.theme.TealOnSurface
-import kotlinx.coroutines.launch
-import java.util.UUID
 
 /**
- * Compact Gear Icon Button in the header with live Online/Offline status indicator dot.
+ * Compact Gear Icon Button with live Online/Offline status indicator dot (retained for ExamHubScreen).
  */
 @Composable
 fun SettingsGearButton(
@@ -135,7 +138,6 @@ fun SettingsGearButton(
                 tint = Color.White,
                 modifier = Modifier.size(20.dp)
             )
-            // Online / Offline indicator dot
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
@@ -149,12 +151,12 @@ fun SettingsGearButton(
 }
 
 /**
- * Settings & Offline-First Hybrid Data Architecture Bottom Sheet:
- * 1. Online/Offline status & Local SQLite engine summary
- * 2. "Đồng bộ Cloud Database" (Google Sheets public CSV/GViz sync across 5 standardized tabs)
- * 3. Full Backup Export / Restore (.json) via zero-permission Android SAF
- * 4. Offline MP3/WAV Audio Vault
- * 5. Personal Self-Study Materials (Personal_Materials) viewer & quick editor
+ * Reorganized Settings ("Cài đặt") Bottom Sheet accessed from the Account Sidebar Drawer:
+ * 1. Notification Scheduler Entry (Lịch nhắc học hằng ngày)
+ * 2. Link Google Sheet Cloud Database (URL input, sync status, "Đồng bộ dữ liệu ngay")
+ * 3. Theme Customizer Entry (Giao diện & Dark Mode)
+ * 4. Offline Audio Vault (MP3/WAV) & Study Logs
+ * 5. Reset Study Progress (with confirmation dialog)
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -164,76 +166,59 @@ fun CloudSyncSettingsSheet(
     lastSyncedAtLabel: String,
     storageCounts: LocalStorageCounts,
     cloudSyncState: CloudSyncUiState,
-    personalMaterials: List<PersonalMaterial>,
+    notificationPrefs: NotificationPreferences = NotificationPreferences(),
+    userProfile: UserAccountProfile = UserAccountProfile(),
     audioBlobs: List<AudioBlobRecord>,
     studyLogs: List<StudyLogEntry>,
-    activeModuleId: Int,
+    googleCseApiKey: String = "",
+    googleCseCx: String = "",
+    streakVisualStyle: StreakVisualStyle = StreakVisualStyle.TREE,
+    currentStreakDays: Int = 0,
+    focusScheduleSection: Boolean = false,
     onSheetUrlChange: (String) -> Unit,
     onSyncNow: (String) -> Unit,
-    onExportBackupJson: suspend () -> String,
-    onRestoreBackupJson: (String) -> Unit,
+    onSaveGoogleCseConfig: (apiKey: String, cx: String) -> Unit = { _, _ -> },
+    onSelectStreakVisualStyle: (StreakVisualStyle) -> Unit = {},
+    onOpenAvatarPicker: () -> Unit = {},
+    onMasterReminderEnabledChange: (Boolean) -> Unit = {},
+    onSaveVocabSlot: (existingId: String?, hour: Int, minute: Int, labelVi: String) -> Unit = { _, _, _, _ -> },
+    onToggleVocabSlot: (String) -> Unit = {},
+    onDeleteVocabSlot: (String) -> Unit = {},
+    onToggleVocabRepeatDay: (String) -> Unit = {},
+    onSaveTestSlot: (existingId: String?, hour: Int, minute: Int, labelVi: String) -> Unit = { _, _, _, _ -> },
+    onToggleTestSlot: (String) -> Unit = {},
+    onDeleteTestSlot: (String) -> Unit = {},
+    onToggleTestRepeatDay: (String) -> Unit = {},
+    onSelectReminderTone: (ReminderTone) -> Unit = {},
+    onSendTestNotificationNow: () -> Unit = {},
     onImportAudioUri: (Uri) -> Unit,
     onDeleteAudioBlob: (AudioBlobRecord) -> Unit,
-    onSavePersonalMaterial: (PersonalMaterial) -> Unit,
-    onDeletePersonalMaterial: (String) -> Unit,
+    onOpenNotificationSheet: () -> Unit = {},
     onOpenThemeSheet: () -> Unit,
-    onShowMessage: (String) -> Unit,
+    onResetStudyProgress: () -> Unit = {},
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
+    val scrollState = rememberScrollState()
+
+    LaunchedEffect(focusScheduleSection) {
+        if (focusScheduleSection) {
+            scrollState.animateScrollTo(320)
+        }
+    }
 
     var draftUrl by remember(sheetUrl) { mutableStateOf(sheetUrl) }
+    var draftCseKey by remember(googleCseApiKey) { mutableStateOf(googleCseApiKey) }
+    var draftCseCx by remember(googleCseCx) { mutableStateOf(googleCseCx) }
     var showSchemaGuide by remember { mutableStateOf(false) }
-    var showAddMaterialDialog by remember { mutableStateOf(false) }
+    var showVocabImageApiExpanded by remember { mutableStateOf(false) }
     var showLogsExpanded by remember { mutableStateOf(false) }
+    var showResetConfirmDialog by remember { mutableStateOf(false) }
 
     val extractedSheetId = remember(draftUrl) {
         GoogleSheetsSyncService.extractSpreadsheetId(draftUrl)
     }
 
-    // SAF Launcher 1: Export Full Backup (.json)
-    val exportBackupLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("application/json")
-    ) { uri ->
-        if (uri != null) {
-            scope.launch {
-                runCatching {
-                    val payload = onExportBackupJson()
-                    context.contentResolver.openOutputStream(uri)?.use { out ->
-                        out.write(payload.toByteArray(Charsets.UTF_8))
-                    }
-                }.onSuccess {
-                    onShowMessage("Đã xuất tệp sao lưu toàn bộ dữ liệu (.json) thành công!")
-                }.onFailure { err ->
-                    onShowMessage("Lỗi xuất tệp sao lưu: ${err.localizedMessage ?: "Không rõ"}")
-                }
-            }
-        }
-    }
-
-    // SAF Launcher 2: Restore Full Backup (.json)
-    val restoreBackupLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        if (uri != null) {
-            scope.launch {
-                runCatching {
-                    context.contentResolver.openInputStream(uri)
-                        ?.bufferedReader(Charsets.UTF_8)
-                        ?.use { it.readText() }
-                        ?: error("Không đọc được nội dung tệp JSON.")
-                }.onSuccess { rawJson ->
-                    onRestoreBackupJson(rawJson)
-                }.onFailure { err ->
-                    onShowMessage("Lỗi đọc tệp khôi phục: ${err.localizedMessage ?: "Không rõ"}")
-                }
-            }
-        }
-    }
-
-    // SAF Launcher 3: Import MP3/WAV Audio Blob into Offline Vault
     val audioPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -253,7 +238,8 @@ fun CloudSyncSettingsSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
-                .verticalScroll(rememberScrollState())
+                .imePadding()
+                .verticalScroll(scrollState)
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -266,26 +252,26 @@ fun CloudSyncSettingsSheet(
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.weight(1f)
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(42.dp)
-                            .clip(RoundedCornerShape(14.dp))
+                            .size(50.dp)
+                            .clip(RoundedCornerShape(16.dp))
                             .background(ElectricIndigoLight),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Rounded.CloudSync,
+                            imageVector = Icons.Rounded.Settings,
                             contentDescription = null,
                             tint = IndigoOnSurface,
-                            modifier = Modifier.size(22.dp)
+                            modifier = Modifier.size(28.dp)
                         )
                     }
                     Column {
                         Text(
-                            text = stringResource(R.string.settings_sheet_title),
+                            text = "Cài đặt Master Ielts",
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontFamily = PlusJakartaSansFontFamily,
                                 fontWeight = FontWeight.ExtraBold
@@ -293,7 +279,7 @@ fun CloudSyncSettingsSheet(
                             color = InkPrimary
                         )
                         Text(
-                            text = stringResource(R.string.settings_sheet_subtitle),
+                            text = "Hồ sơ, Lịch học & Nhắc nhở, Giao diện & Google Sheet",
                             style = MaterialTheme.typography.bodySmall,
                             color = InkMuted
                         )
@@ -353,12 +339,15 @@ fun CloudSyncSettingsSheet(
 
                     Surface(
                         shape = RoundedCornerShape(50),
-                        color = CardWhite
+                        color = CardWhite,
+                        modifier = Modifier.wrapContentWidth()
                     ) {
                         Text(
                             text = "${storageCounts.totalSyncedRecords} mục",
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                             color = IndigoOnSurface,
+                            maxLines = 1,
+                            softWrap = false,
                             modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
                         )
                     }
@@ -366,7 +355,230 @@ fun CloudSyncSettingsSheet(
             }
 
             // ================================================================
-            // PANEL 1: Đồng bộ Cloud Database (Google Sheets 5-Tab Connector)
+            // PANEL 1: Hồ sơ (Avatar Customization), Theme & Streak Icon Style
+            // ================================================================
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                // Profile & Avatar Customizer Card (Cài đặt -> Hồ sơ)
+                Surface(
+                    shape = RoundedCornerShape(18.dp),
+                    color = SurfaceCanvas,
+                    border = BorderStroke(1.dp, CardBorderSoft),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(18.dp))
+                        .clickable { onOpenAvatarPicker() }
+                        .minimumInteractiveComponentSize()
+                        .testTag("settings_profile_avatar_btn")
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 13.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Box(modifier = Modifier.size(54.dp), contentAlignment = Alignment.Center) {
+                            UserAvatarCircle(
+                                userProfile = userProfile,
+                                size = 52.dp,
+                                borderColor = ElectricIndigo.copy(alpha = 0.45f),
+                                borderWidth = 2.dp
+                            )
+                            Surface(
+                                shape = CircleShape,
+                                color = ElectricIndigo,
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .size(20.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.PhotoCamera,
+                                        contentDescription = "Đổi ảnh đại diện",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                }
+                            }
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Hồ sơ & Ảnh đại diện (Avatar)",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                color = InkPrimary
+                            )
+                            Text(
+                                text = "${userProfile.displayName.ifBlank { "Học viên Master Ielts" }} • Chạm để đổi ảnh hoặc chọn 8 mẫu Avatar",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = InkSecondary,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Rounded.ArrowForwardIos,
+                            contentDescription = null,
+                            tint = InkMuted,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                }
+
+                // Theme Customizer Entry
+                Surface(
+                    shape = RoundedCornerShape(18.dp),
+                    color = SurfaceCanvas,
+                    border = BorderStroke(1.dp, CardBorderSoft),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(18.dp))
+                        .clickable {
+                            onDismiss()
+                            onOpenThemeSheet()
+                        }
+                        .minimumInteractiveComponentSize()
+                        .testTag("settings_open_theme_btn")
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 13.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(PracticeTealLight),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Palette,
+                                contentDescription = null,
+                                tint = TealOnSurface,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Giao diện & Chế độ tối (Theme Customizer)",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                color = InkPrimary
+                            )
+                            Text(
+                                text = "Chế độ Sáng, Học đêm & Phòng thi CD-IELTS Dark Mode",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = InkSecondary
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Rounded.ArrowForwardIos,
+                            contentDescription = null,
+                            tint = InkMuted,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                }
+
+                // ================================================================
+                // PANEL 1B: FULL "Lịch học & Nhắc nhở" Section inside General Settings
+                // ================================================================
+                StudyScheduleSettingsSection(
+                    prefs = notificationPrefs,
+                    onMasterEnabledChange = onMasterReminderEnabledChange,
+                    onSaveVocabSlot = onSaveVocabSlot,
+                    onToggleVocabSlot = onToggleVocabSlot,
+                    onDeleteVocabSlot = onDeleteVocabSlot,
+                    onToggleVocabRepeatDay = onToggleVocabRepeatDay,
+                    onSaveTestSlot = onSaveTestSlot,
+                    onToggleTestSlot = onToggleTestSlot,
+                    onDeleteTestSlot = onDeleteTestSlot,
+                    onToggleTestRepeatDay = onToggleTestRepeatDay,
+                    onSelectTone = onSelectReminderTone,
+                    onSendTestNow = onSendTestNotificationNow
+                )
+
+                // Streak Icon Visual Style Toggle: Cái cây (Growth Tree) <-> Ngọn lửa (Mastery Flame)
+                Surface(
+                    shape = RoundedCornerShape(18.dp),
+                    color = SurfaceCanvas,
+                    border = BorderStroke(1.dp, CardBorderSoft),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("settings_streak_style_card")
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(
+                                text = "Biểu tượng chuỗi học (Streak Mastery)",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                color = InkPrimary
+                            )
+                            Text(
+                                text = "Tiến hóa 6 cấp từ 0 ngày đến IELTS Master 8.5 (60+ ngày)",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = InkSecondary
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            StreakVisualStyle.entries.forEach { style ->
+                                val isSelected = style == streakVisualStyle
+                                Surface(
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = if (isSelected) ElectricIndigoLight else CardWhite,
+                                    border = BorderStroke(
+                                        width = if (isSelected) 1.5.dp else 1.dp,
+                                        color = if (isSelected) ElectricIndigo else CardBorderSoft
+                                    ),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .clickable { onSelectStreakVisualStyle(style) }
+                                        .minimumInteractiveComponentSize()
+                                        .testTag("settings_streak_style_${style.id}")
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 10.dp, vertical = 9.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        MasteryStreakIcon(
+                                            streakDays = currentStreakDays,
+                                            style = style,
+                                            size = 24.dp,
+                                            contentDescriptionText = style.labelVi
+                                        )
+                                        Text(
+                                            text = style.labelVi,
+                                            style = MaterialTheme.typography.labelMedium.copy(
+                                                fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.SemiBold
+                                            ),
+                                            color = if (isSelected) IndigoOnSurface else InkPrimary,
+                                            maxLines = 1,
+                                            softWrap = false,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ================================================================
+            // PANEL 2: Link Google Sheet Cloud Database (Strictly inside Settings)
             // ================================================================
             Surface(
                 shape = RoundedCornerShape(22.dp),
@@ -386,13 +598,16 @@ fun CloudSyncSettingsSheet(
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.weight(1f)
                         ) {
                             Icon(Icons.Rounded.Storage, contentDescription = null, tint = IndigoOnSurface, modifier = Modifier.size(18.dp))
                             Text(
-                                text = stringResource(R.string.sync_panel_title),
+                                text = "Liên kết Google Sheet Cloud Database",
                                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                color = InkPrimary
+                                color = InkPrimary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                         Surface(
@@ -422,7 +637,6 @@ fun CloudSyncSettingsSheet(
                         }
                     }
 
-                    // 5-Tab Live Record Count Badges
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
@@ -452,7 +666,7 @@ fun CloudSyncSettingsSheet(
                                 Text(
                                     text = "• 5 tên tab: Modules, Vocabulary, Sentence_Drills, Exams, Personal_Materials\n" +
                                         "• Định dạng cột snake_case (hỗ trợ dấu phẩy trong ngoặc kép & chuỗi JSON trong questions_json)\n" +
-                                        "• Tự động gộp theo ID vào SQLite, không bao giờ tạo bản ghi trùng lặp.",
+                                        "• Tự động gộp theo ID vào SQLite, không tạo bản ghi trùng lặp.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = InkSecondary
                                 )
@@ -555,7 +769,6 @@ fun CloudSyncSettingsSheet(
                         }
                     }
 
-                    // Sync Result Feedback Card
                     when (cloudSyncState) {
                         is CloudSyncUiState.Success -> {
                             Surface(
@@ -614,10 +827,143 @@ fun CloudSyncSettingsSheet(
             }
 
             // ================================================================
-            // PANEL 2: Full Backup Export / Restore (.json) & Offline Audio Vault
+            // PANEL 2B: Vocabulary Illustration Source (Zero-Config Wikipedia / Optional Google CSE)
             // ================================================================
             Surface(
-                shape = RoundedCornerShape(22.dp),
+                shape = RoundedCornerShape(20.dp),
+                color = SurfaceCanvas,
+                border = BorderStroke(1.dp, CardBorderSoft)
+            ) {
+                val hasCustomSearch = googleCseApiKey.isNotBlank() && googleCseCx.isNotBlank()
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { showVocabImageApiExpanded = !showVocabImageApiExpanded }
+                            .testTag("settings_vocab_image_source_toggle"),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Rounded.ImageSearch, contentDescription = null, tint = IndigoOnSurface, modifier = Modifier.size(18.dp))
+                            Column {
+                                Text(
+                                    text = "Ảnh minh họa từ vựng (Học -> Từ mới)",
+                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = InkPrimary
+                                )
+                                Text(
+                                    text = if (hasCustomSearch) {
+                                        "Đang ưu tiên Google Custom Search API"
+                                    } else {
+                                        "Mặc định tự động miễn phí: Wikipedia & Wikimedia Commons"
+                                    },
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (hasCustomSearch) EmeraldOnContainer else InkSecondary
+                                )
+                            }
+                        }
+                        Icon(
+                            imageVector = if (showVocabImageApiExpanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                            contentDescription = null,
+                            tint = InkSecondary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    AnimatedVisibility(visible = showVocabImageApiExpanded) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                text = "Không cần cấu hình để dùng ngay. Nếu muốn ưu tiên ảnh Google Image Search, nhập tùy chọn API Key và Search Engine ID (CX) bên dưới:",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = InkSecondary
+                            )
+                            OutlinedTextField(
+                                value = draftCseKey,
+                                onValueChange = { draftCseKey = it },
+                                label = { Text("Google Custom Search API Key (tùy chọn)", style = MaterialTheme.typography.labelSmall) },
+                                singleLine = true,
+                                shape = RoundedCornerShape(14.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = ElectricIndigo,
+                                    unfocusedBorderColor = CardBorderSoft,
+                                    focusedContainerColor = CardWhite,
+                                    unfocusedContainerColor = CardWhite
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("google_cse_api_key_input")
+                            )
+                            OutlinedTextField(
+                                value = draftCseCx,
+                                onValueChange = { draftCseCx = it },
+                                label = { Text("Search Engine ID / CX (tùy chọn)", style = MaterialTheme.typography.labelSmall) },
+                                singleLine = true,
+                                shape = RoundedCornerShape(14.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = ElectricIndigo,
+                                    unfocusedBorderColor = CardBorderSoft,
+                                    focusedContainerColor = CardWhite,
+                                    unfocusedContainerColor = CardWhite
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("google_cse_cx_input")
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                OutlinedButton(
+                                    onClick = {
+                                        draftCseKey = ""
+                                        draftCseCx = ""
+                                        onSaveGoogleCseConfig("", "")
+                                    },
+                                    shape = RoundedCornerShape(12.dp),
+                                    border = BorderStroke(1.dp, CardBorderSoft),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .minimumInteractiveComponentSize()
+                                        .testTag("google_cse_reset_btn")
+                                ) {
+                                    Text("Dùng Wikipedia", style = MaterialTheme.typography.labelSmall, color = InkSecondary)
+                                }
+                                Button(
+                                    onClick = { onSaveGoogleCseConfig(draftCseKey, draftCseCx) },
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = ElectricIndigo,
+                                        contentColor = Color.White
+                                    ),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .minimumInteractiveComponentSize()
+                                        .testTag("google_cse_save_btn")
+                                ) {
+                                    Text("Lưu cấu hình", style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ================================================================
+            // PANEL 3: Offline MP3 / WAV Audio Vault
+            // ================================================================
+            Surface(
+                shape = RoundedCornerShape(20.dp),
                 color = SurfaceCanvas,
                 border = BorderStroke(1.dp, CardBorderSoft)
             ) {
@@ -627,65 +973,6 @@ fun CloudSyncSettingsSheet(
                         .padding(14.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Text(
-                        text = stringResource(R.string.backup_section_title),
-                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                        color = InkPrimary
-                    )
-                    Text(
-                        text = "Xuất toàn bộ dữ liệu SQLite cục bộ (chủ đề, từ vựng, câu trúc 8.5+, đề thi, tài liệu cá nhân & nhật ký học) ra tệp .json hoặc khôi phục lại bất cứ lúc nào.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = InkSecondary
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Button(
-                            onClick = { exportBackupLauncher.launch("ApexIELTS_85_FullBackup.json") },
-                            shape = RoundedCornerShape(14.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = PracticeTeal, contentColor = Color.White),
-                            contentPadding = PaddingValues(vertical = 11.dp, horizontal = 10.dp),
-                            modifier = Modifier
-                                .weight(1f)
-                                .minimumInteractiveComponentSize()
-                                .testTag("export_full_backup_button")
-                        ) {
-                            Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(5.dp))
-                            Text(
-                                text = stringResource(R.string.backup_export_btn),
-                                style = MaterialTheme.typography.labelMedium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-
-                        OutlinedButton(
-                            onClick = { restoreBackupLauncher.launch(arrayOf("application/json", "text/plain", "*/*")) },
-                            shape = RoundedCornerShape(14.dp),
-                            border = BorderStroke(1.dp, PracticeTeal),
-                            contentPadding = PaddingValues(vertical = 11.dp, horizontal = 10.dp),
-                            modifier = Modifier
-                                .weight(1f)
-                                .minimumInteractiveComponentSize()
-                                .testTag("restore_full_backup_button")
-                        ) {
-                            Icon(Icons.Rounded.Upload, contentDescription = null, tint = TealOnSurface, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(5.dp))
-                            Text(
-                                text = stringResource(R.string.backup_restore_btn),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = TealOnSurface,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(2.dp))
-
-                    // Offline Audio Blob Storage (MP3 / WAV)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
@@ -727,7 +1014,7 @@ fun CloudSyncSettingsSheet(
 
                     if (audioBlobs.isEmpty()) {
                         Text(
-                            text = "Lưu tệp nghe MP3/WAV dung lượng lớn trực tiếp vào bộ nhớ cục bộ (không bị giới hạn 5MB như localStorage).",
+                            text = "Chưa có tệp âm thanh MP3/WAV ngoại tuyến nào được tải lên.",
                             style = MaterialTheme.typography.bodySmall,
                             color = InkMuted
                         )
@@ -741,14 +1028,14 @@ fun CloudSyncSettingsSheet(
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                                        .padding(horizontal = 10.dp, vertical = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
                                             text = blob.displayName,
-                                            style = MaterialTheme.typography.labelMedium,
+                                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                                             color = InkPrimary,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis
@@ -760,115 +1047,8 @@ fun CloudSyncSettingsSheet(
                                         )
                                     }
                                     IconButton(onClick = { onDeleteAudioBlob(blob) }) {
-                                        Icon(Icons.Rounded.DeleteOutline, contentDescription = "Xóa audio", tint = RoseAlert, modifier = Modifier.size(18.dp))
+                                        Icon(Icons.Rounded.DeleteOutline, contentDescription = "Xóa tệp audio", tint = RoseAlert, modifier = Modifier.size(18.dp))
                                     }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // ================================================================
-            // PANEL 3: Personal Self-Study Materials (Personal_Materials)
-            // ================================================================
-            Surface(
-                shape = RoundedCornerShape(22.dp),
-                color = SurfaceCanvas,
-                border = BorderStroke(1.dp, CardBorderSoft)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Icon(Icons.Rounded.MenuBook, contentDescription = null, tint = TealOnSurface, modifier = Modifier.size(18.dp))
-                            Text(
-                                text = "${stringResource(R.string.personal_materials_title)} (${personalMaterials.size})",
-                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                color = InkPrimary
-                            )
-                        }
-                        Surface(
-                            shape = RoundedCornerShape(50),
-                            color = PracticeTealLight,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(50))
-                                .clickable { showAddMaterialDialog = true }
-                                .testTag("add_personal_material_button")
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(3.dp),
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                            ) {
-                                Icon(Icons.Rounded.Add, contentDescription = null, tint = TealOnSurface, modifier = Modifier.size(14.dp))
-                                Text(
-                                    text = stringResource(R.string.personal_materials_add_btn),
-                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                    color = TealOnSurface
-                                )
-                            }
-                        }
-                    }
-
-                    personalMaterials.take(5).forEach { mat ->
-                        Surface(
-                            shape = RoundedCornerShape(14.dp),
-                            color = CardWhite,
-                            border = BorderStroke(1.dp, CardBorderSoft)
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(11.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text(
-                                        text = mat.title,
-                                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                                        color = InkPrimary,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    IconButton(
-                                        onClick = { onDeletePersonalMaterial(mat.id) },
-                                        modifier = Modifier.size(32.dp)
-                                    ) {
-                                        Icon(Icons.Rounded.DeleteOutline, contentDescription = "Xóa tài liệu", tint = RoseAlert, modifier = Modifier.size(16.dp))
-                                    }
-                                }
-                                if (mat.contentEn.isNotBlank()) {
-                                    Text(
-                                        text = mat.contentEn,
-                                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = PlusJakartaSansFontFamily),
-                                        color = IndigoOnSurface,
-                                        maxLines = 3,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                                if (mat.notesVi.isNotBlank()) {
-                                    Text(
-                                        text = mat.notesVi,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = InkSecondary,
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
                                 }
                             }
                         }
@@ -929,44 +1109,105 @@ fun CloudSyncSettingsSheet(
                 }
             }
 
-            // Quick shortcut to Global Theme Manager + Close button
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            // ================================================================
+            // PANEL 4: Reset Study Progress (with Confirmation Dialog)
+            // ================================================================
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = RoseDiffLight.copy(alpha = 0.55f),
+                border = BorderStroke(1.dp, RoseAlert.copy(alpha = 0.35f))
             ) {
-                OutlinedButton(
-                    onClick = {
-                        onDismiss()
-                        onOpenThemeSheet()
-                    },
-                    shape = RoundedCornerShape(14.dp),
-                    border = BorderStroke(1.dp, CardBorderSoft),
+                Column(
                     modifier = Modifier
-                        .weight(1f)
-                        .minimumInteractiveComponentSize()
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("Giao diện & Dark Mode", color = InkPrimary, style = MaterialTheme.typography.labelMedium)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(Icons.Rounded.RestartAlt, contentDescription = null, tint = RoseAlert, modifier = Modifier.size(18.dp))
+                        Text(
+                            text = stringResource(R.string.settings_reset_progress_title),
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            color = InkPrimary
+                        )
+                    }
+                    Text(
+                        text = "Xóa tiến độ 12 Module, chuỗi ngày học (Streak), thói quen hôm nay, hàng đợi SRS và lịch sử thi thử. Tài khoản và Thư viện tài liệu cá nhân vẫn được giữ lại.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = InkSecondary
+                    )
+                    OutlinedButton(
+                        onClick = { showResetConfirmDialog = true },
+                        shape = RoundedCornerShape(14.dp),
+                        border = BorderStroke(1.dp, RoseAlert),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = RoseAlert),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .minimumInteractiveComponentSize()
+                            .testTag("settings_reset_progress_button")
+                    ) {
+                        Icon(Icons.Rounded.RestartAlt, contentDescription = null, modifier = Modifier.size(17.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = stringResource(R.string.settings_reset_progress_btn),
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
+                        )
+                    }
                 }
-                Button(
-                    onClick = onDismiss,
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = ElectricIndigo, contentColor = Color.White),
-                    modifier = Modifier.minimumInteractiveComponentSize()
-                ) {
-                    Text(stringResource(R.string.theme_done_btn))
-                }
+            }
+
+            Button(
+                onClick = onDismiss,
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = ElectricIndigo, contentColor = Color.White),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .minimumInteractiveComponentSize()
+            ) {
+                Text(stringResource(R.string.theme_done_btn))
             }
         }
     }
 
-    if (showAddMaterialDialog) {
-        AddPersonalMaterialDialog(
-            moduleId = activeModuleId,
-            onSave = { material ->
-                onSavePersonalMaterial(material)
-                showAddMaterialDialog = false
+    if (showResetConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showResetConfirmDialog = false },
+            containerColor = CardWhite,
+            title = {
+                Text(
+                    text = "Xác nhận đặt lại tiến độ?",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = InkPrimary
+                )
             },
-            onDismiss = { showAddMaterialDialog = false }
+            text = {
+                Text(
+                    text = "Hành động này sẽ đưa chuỗi Streak về 1 ngày và xóa đánh dấu hoàn thành 12 Module, từ đã học, hàng đợi SRS và lịch sử thi thử. Bạn có chắc chắn muốn tiếp tục?",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = InkSecondary
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showResetConfirmDialog = false
+                        onResetStudyProgress()
+                        onDismiss()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = RoseAlert, contentColor = Color.White),
+                    modifier = Modifier.testTag("confirm_reset_progress_btn")
+                ) {
+                    Text("Đặt lại ngay")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetConfirmDialog = false }) {
+                    Text("Hủy", color = InkSecondary)
+                }
+            }
         )
     }
 }
@@ -1004,93 +1245,4 @@ private fun TabCountBadge(tabName: String, count: Int) {
             }
         }
     }
-}
-
-@Composable
-private fun AddPersonalMaterialDialog(
-    moduleId: Int,
-    onSave: (PersonalMaterial) -> Unit,
-    onDismiss: () -> Unit
-) {
-    var title by remember { mutableStateOf("") }
-    var category by remember { mutableStateOf("Writing Notes") }
-    var contentEn by remember { mutableStateOf("") }
-    var notesVi by remember { mutableStateOf("") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = CardWhite,
-        title = {
-            Text(
-                text = "Thêm tài liệu tự học Offline",
-                style = MaterialTheme.typography.titleMedium,
-                color = InkPrimary
-            )
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedTextField(
-                    value = title,
-                    onValueChange = { title = it },
-                    label = { Text("Tiêu đề ghi chú / bài đọc") },
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = category,
-                    onValueChange = { category = it },
-                    label = { Text("Phân loại (VD: Writing Notes, Reading Article)") },
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = contentEn,
-                    onValueChange = { contentEn = it },
-                    label = { Text("Đoạn tiếng Anh học thuật mẫu") },
-                    minLines = 2,
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = notesVi,
-                    onValueChange = { notesVi = it },
-                    label = { Text("Ghi chú & mẹo áp dụng (Tiếng Việt)") },
-                    minLines = 2,
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    if (title.isNotBlank()) {
-                        onSave(
-                            PersonalMaterial(
-                                id = "pm_${UUID.randomUUID().toString().take(8)}",
-                                moduleId = moduleId,
-                                title = title.trim(),
-                                category = category.trim().ifBlank { "Self-Study Note" },
-                                contentEn = contentEn.trim(),
-                                notesVi = notesVi.trim(),
-                                tags = listOf("Module #$moduleId", category.trim().ifBlank { "Note" }),
-                                updatedAt = ExamScoringHelper.nowFormatted()
-                            )
-                        )
-                    }
-                },
-                enabled = title.isNotBlank(),
-                colors = ButtonDefaults.buttonColors(containerColor = PracticeTeal)
-            ) {
-                Text("Lưu vào SQLite")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Hủy", color = InkSecondary)
-            }
-        }
-    )
 }

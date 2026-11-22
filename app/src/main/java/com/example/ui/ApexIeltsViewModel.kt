@@ -4,8 +4,11 @@ import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.ai.AppCheckDiagnostics
+import com.example.ai.AppCheckStatusStore
 import com.example.ai.ExamParserAiService
 import com.example.ai.ExamParserUiState
+import com.example.ai.GeminiResilientClient
 import com.example.ai.PersonalMaterialAiService
 import com.example.ai.PracticeAiService
 import com.example.ai.ReviewDiffAiService
@@ -15,12 +18,17 @@ import com.example.ai.SentenceCoachAiService
 import com.example.ai.SpeakingAiUiState
 import com.example.ai.SyntaxBreakdownUiState
 import com.example.ai.WritingAiUiState
+import com.example.auth.GoogleAuthHelper
+import com.example.auth.SecurityPreferences
+import com.example.auth.UserAccountProfile
 import com.example.data.ActiveExamSession
 import com.example.data.ActivePushBanner
 import com.example.data.DailyBandTip
+import com.example.data.DeepQuestionAnalysis
 import com.example.data.DefaultHabitData
 import com.example.data.ExamAttemptRecord
 import com.example.data.ExamBankCurriculum
+import com.example.data.ExamHubSubTab
 import com.example.data.ExamPaper
 import com.example.data.ExamSkillMode
 import com.example.data.IeltsCurriculum
@@ -30,6 +38,10 @@ import com.example.data.NotificationPreferences
 import com.example.data.PracticeSkill
 import com.example.data.ReminderSlot
 import com.example.data.ReminderTone
+import com.example.data.ReviewErrorLogItem
+import com.example.data.StreakManager
+import com.example.data.StreakStatus
+import com.example.data.StreakVisualStyle
 import com.example.data.StudyTab
 import com.example.data.SyntaxExercise
 import com.example.data.TeacherMood
@@ -50,6 +62,9 @@ import com.example.data.sync.NetworkStatusMonitor
 import com.example.notifications.ApexNotificationHelper
 import com.example.ui.theme.AppThemeMode
 import com.example.ui.theme.AppThemePreferences
+import com.example.ui.theme.AppThemePreset
+import com.example.ui.theme.AppWallpaperPattern
+import com.example.ui.theme.WallpaperStorageHelper
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -68,7 +83,9 @@ data class ApexIeltsUiState(
     val activeTab: StudyTab = StudyTab.ROADMAP,
     val activeModuleId: Int = 1,
     val completedModuleIds: Set<Int> = emptySet(),
-    val streakDays: Int = 1,
+    val streakDays: Int = 0,
+    val streakStatus: StreakStatus = StreakStatus(),
+    val isStreakSheetOpen: Boolean = false,
     val reminderEnabled: Boolean = true,
     val teacherMood: TeacherMood = TeacherMood.TEACHING,
     val isTeacherSpeaking: Boolean = true,
@@ -89,13 +106,17 @@ data class ApexIeltsUiState(
     val syntaxBreakdownState: SyntaxBreakdownUiState = SyntaxBreakdownUiState.Idle,
     val speakingAiState: SpeakingAiUiState = SpeakingAiUiState.Idle,
     val writingAiState: WritingAiUiState = WritingAiUiState.Idle,
-    // Step 5: Tab 4 Exam (Personal Exam Library, Score History, AI Exam Parser & Strict Mode Session)
+    // Tab 4: Đề thi (Thi mô phỏng + Chữa đề merged hub)
+    val activeExamSubTab: ExamHubSubTab = ExamHubSubTab.SIMULATION,
     val customExams: List<ExamPaper> = emptyList(),
     val examHistory: List<ExamAttemptRecord> = emptyList(),
     val examParserState: ExamParserUiState = ExamParserUiState.Idle,
     val activeExamSession: ActiveExamSession? = null,
-    // Step 6: Tab 5 Review & Fix (Band 8.5+ Diff AI + Error Log -> Tab 3 Focus Action Loop)
+    // Chữa đề (Band 8.5+ Diff AI, Deep Question Analysis AI + Error Log -> Tab 3 Focus Action Loop)
     val reviewDiffAiState: ReviewDiffAiUiState = ReviewDiffAiUiState.Idle,
+    val deepQuestionAiResults: Map<String, DeepQuestionAnalysis> = emptyMap(),
+    val loadingQuestionAnalysisIds: Set<String> = emptySet(),
+    val questionAnalysisErrors: Map<String, String> = emptyMap(),
     val pendingPracticeSkill: PracticeSkill? = null,
     val pendingPracticeFocusNote: String? = null,
     // Global Theme Manager (Light / Late-Night Study / CD-IELTS Exam Dark / System)
@@ -121,7 +142,21 @@ data class ApexIeltsUiState(
     val isPersonalLibraryOpen: Boolean = false,
     val isBulkImporterOpen: Boolean = false,
     val bulkImporterDataset: BulkImportDataset = BulkImportDataset.VOCABULARY,
-    val personalMaterialAiState: PersonalMaterialAiUiState = PersonalMaterialAiUiState.Idle
+    val personalMaterialAiState: PersonalMaterialAiUiState = PersonalMaterialAiUiState.Idle,
+    // Security, Firebase App Check & Sideload Gemini REST Fallback
+    val personalGeminiApiKey: String = "",
+    val googleCseApiKey: String = "",
+    val googleCseCx: String = "",
+    val appCheckDiagnostics: AppCheckDiagnostics = AppCheckDiagnostics(),
+    // Authentication, Account Sidebar Drawer & App Lock Security
+    val isAuthLoaded: Boolean = false,
+    val userProfile: UserAccountProfile = UserAccountProfile(),
+    val securityPrefs: SecurityPreferences = SecurityPreferences(),
+    val isAppUnlocked: Boolean = true,
+    val isSecuritySheetOpen: Boolean = false,
+    val isAddMaterialsSheetOpen: Boolean = false,
+    val isAvatarPickerOpen: Boolean = false,
+    val settingsFocusSchedule: Boolean = false
 ) {
     val activeModule: IeltsModule
         get() = modules.firstOrNull { it.id == activeModuleId } ?: IeltsCurriculum.moduleById(activeModuleId)
@@ -141,6 +176,23 @@ data class ApexIeltsUiState(
         get() {
             val byId = allVocabulary.associateBy { it.id }
             return srsWordIds.mapNotNull { id -> byId[id] ?: LearnCurriculum.wordById(id) }
+        }
+
+    val unlearnedActiveModuleWords: List<VocabWordItem>
+        get() = activeModuleWords.filterNot { learnedVocabIds.contains(it.id) }
+
+    val notificationUnreadCount: Int
+        get() {
+            val vocabDue = (srsReviewWords.map { it.id } + unlearnedActiveModuleWords.map { it.id }).toSet().size
+            val isTestDayToday = notificationPrefs.testRepeatDays.contains(todayWeekdayId)
+            val testAlerts = if (isTestDayToday) {
+                notificationPrefs.testSlots.count { it.enabled }.coerceAtLeast(1)
+            } else if (!completedModuleIds.contains(activeModuleId)) {
+                1
+            } else {
+                0
+            }
+            return vocabDue + testAlerts
         }
 
     val currentBand: Float
@@ -176,7 +228,11 @@ class ApexIeltsViewModel(application: Application) : AndroidViewModel(applicatio
     private val writingAiState = MutableStateFlow<WritingAiUiState>(WritingAiUiState.Idle)
     private val examParserState = MutableStateFlow<ExamParserUiState>(ExamParserUiState.Idle)
     private val activeExamSession = MutableStateFlow<ActiveExamSession?>(null)
+    private val activeExamSubTab = MutableStateFlow(ExamHubSubTab.SIMULATION)
     private val reviewDiffAiState = MutableStateFlow<ReviewDiffAiUiState>(ReviewDiffAiUiState.Idle)
+    private val deepQuestionAiResults = MutableStateFlow<Map<String, DeepQuestionAnalysis>>(emptyMap())
+    private val loadingQuestionAnalysisIds = MutableStateFlow<Set<String>>(emptySet())
+    private val questionAnalysisErrors = MutableStateFlow<Map<String, String>>(emptyMap())
     private val pendingPracticeSkill = MutableStateFlow<PracticeSkill?>(null)
     private val pendingPracticeFocusNote = MutableStateFlow<String?>(null)
     private val isThemeSheetOpen = MutableStateFlow(false)
@@ -186,6 +242,13 @@ class ApexIeltsViewModel(application: Application) : AndroidViewModel(applicatio
     private val isBulkImporterOpen = MutableStateFlow(false)
     private val bulkImporterDataset = MutableStateFlow(BulkImportDataset.VOCABULARY)
     private val personalMaterialAiState = MutableStateFlow<PersonalMaterialAiUiState>(PersonalMaterialAiUiState.Idle)
+    private val isSecuritySheetOpen = MutableStateFlow(false)
+    private val isAddMaterialsSheetOpen = MutableStateFlow(false)
+    private val isSessionPinUnlocked = MutableStateFlow(false)
+    private val isStreakSheetOpen = MutableStateFlow(false)
+    private val todayIsoDateFlow = MutableStateFlow(StreakManager.todayIsoDate())
+    private val isAvatarPickerOpen = MutableStateFlow(false)
+    private val settingsFocusSchedule = MutableStateFlow(false)
 
     private var speechPulseJob: Job? = null
     private var bannerAutoDismissJob: Job? = null
@@ -203,10 +266,21 @@ class ApexIeltsViewModel(application: Application) : AndroidViewModel(applicatio
         val writingAi: WritingAiUiState = WritingAiUiState.Idle,
         val examParser: ExamParserUiState = ExamParserUiState.Idle,
         val examSession: ActiveExamSession? = null,
+        val examSubTab: ExamHubSubTab = ExamHubSubTab.SIMULATION,
         val reviewDiffAi: ReviewDiffAiUiState = ReviewDiffAiUiState.Idle,
+        val deepQuestionAi: Map<String, DeepQuestionAnalysis> = emptyMap(),
+        val loadingQuestionIds: Set<String> = emptySet(),
+        val questionErrors: Map<String, String> = emptyMap(),
         val pendingSkill: PracticeSkill? = null,
         val pendingFocusNote: String? = null,
         val themeSheetOpen: Boolean = false
+    )
+
+    private data class DeepAnalysisOverlay(
+        val subTab: ExamHubSubTab,
+        val results: Map<String, DeepQuestionAnalysis>,
+        val loadingIds: Set<String>,
+        val errors: Map<String, String>
     )
 
     private val practiceAiFlow = combine(
@@ -222,6 +296,15 @@ class ApexIeltsViewModel(application: Application) : AndroidViewModel(applicatio
         activeExamSession
     ) { parser, session ->
         parser to session
+    }
+
+    private val deepAnalysisOverlayFlow = combine(
+        activeExamSubTab,
+        deepQuestionAiResults,
+        loadingQuestionAnalysisIds,
+        questionAnalysisErrors
+    ) { subTab, results, loadingIds, errors ->
+        DeepAnalysisOverlay(subTab, results, loadingIds, errors)
     }
 
     private val reviewOverlayFlow = combine(
@@ -254,6 +337,13 @@ class ApexIeltsViewModel(application: Application) : AndroidViewModel(applicatio
             examParser = parser,
             examSession = session
         )
+    }.combine(deepAnalysisOverlayFlow) { overlay, deep ->
+        overlay.copy(
+            examSubTab = deep.subTab,
+            deepQuestionAi = deep.results,
+            loadingQuestionIds = deep.loadingIds,
+            questionErrors = deep.errors
+        )
     }.combine(reviewOverlayFlow) { overlay, items ->
         overlay.copy(
             reviewDiffAi = items[0] as ReviewDiffAiUiState,
@@ -278,7 +368,14 @@ class ApexIeltsViewModel(application: Application) : AndroidViewModel(applicatio
         val libraryOpen: Boolean = false,
         val importerOpen: Boolean = false,
         val importerDataset: BulkImportDataset = BulkImportDataset.VOCABULARY,
-        val materialAi: PersonalMaterialAiUiState = PersonalMaterialAiUiState.Idle
+        val materialAi: PersonalMaterialAiUiState = PersonalMaterialAiUiState.Idle,
+        val securitySheetOpen: Boolean = false,
+        val addMaterialsSheetOpen: Boolean = false,
+        val sessionPinUnlocked: Boolean = false,
+        val streakSheetOpen: Boolean = false,
+        val todayIsoDate: String = StreakManager.todayIsoDate(),
+        val avatarPickerOpen: Boolean = false,
+        val focusScheduleInSettings: Boolean = false
     )
 
     private val hybridContentFlow = combine(
@@ -332,24 +429,68 @@ class ApexIeltsViewModel(application: Application) : AndroidViewModel(applicatio
             importerDataset = libExtra[2] as BulkImportDataset,
             materialAi = libExtra[3] as PersonalMaterialAiUiState
         )
+    }.combine(
+        combine(
+            isSecuritySheetOpen,
+            isAddMaterialsSheetOpen,
+            isSessionPinUnlocked,
+            isStreakSheetOpen,
+            todayIsoDateFlow
+        ) { secOpen, addMatOpen, unlocked, streakOpen, todayIso ->
+            listOf(secOpen, addMatOpen, unlocked, streakOpen, todayIso)
+        }
+    ) { snap, extra ->
+        snap.copy(
+            securitySheetOpen = extra[0] as Boolean,
+            addMaterialsSheetOpen = extra[1] as Boolean,
+            sessionPinUnlocked = extra[2] as Boolean,
+            streakSheetOpen = extra[3] as Boolean,
+            todayIsoDate = extra[4] as String
+        )
+    }.combine(
+        combine(isAvatarPickerOpen, settingsFocusSchedule) { avatarOpen, focusSchedule ->
+            avatarOpen to focusSchedule
+        }
+    ) { snap, (avatarOpen, focusSchedule) ->
+        snap.copy(
+            avatarPickerOpen = avatarOpen,
+            focusScheduleInSettings = focusSchedule
+        )
     }
 
     val uiState: StateFlow<ApexIeltsUiState> = combine(
         repository.userStateFlow,
         overlayFlow,
-        hybridContentFlow
-    ) { persisted, overlay, hybrid ->
+        hybridContentFlow,
+        AppCheckStatusStore.diagnostics
+    ) { persisted, overlay, hybrid, appCheck ->
+        GeminiResilientClient.personalGeminiApiKey = persisted.personalGeminiApiKey
         val authenticExams = hybrid.exams.filter { !it.isCustom }.ifEmpty { ExamBankCurriculum.authenticExams }
         val mergedCustomExams = LinkedHashMap<String, ExamPaper>().apply {
             hybrid.exams.filter { it.isCustom }.forEach { put(it.id, it) }
             persisted.customExams.forEach { if (!containsKey(it.id)) put(it.id, it) }
         }.values.toList()
 
+        val resolvedTab = if (persisted.activeTabIndex >= StudyTab.entries.size) {
+            StudyTab.EXAM
+        } else {
+            StudyTab.entries.getOrElse(persisted.activeTabIndex) { StudyTab.ROADMAP }
+        }
+
+        val computedStreakStatus = StreakManager.buildStatus(
+            storedStreak = persisted.streakDays,
+            lastKpiCompletedDate = persisted.lastKpiCompletedDate,
+            visualStyle = persisted.streakVisualStyle,
+            todayIso = hybrid.todayIsoDate
+        )
+
         ApexIeltsUiState(
-            activeTab = StudyTab.entries.getOrElse(persisted.activeTabIndex) { StudyTab.ROADMAP },
+            activeTab = resolvedTab,
             activeModuleId = persisted.activeModuleId,
             completedModuleIds = persisted.completedModuleIds,
-            streakDays = persisted.streakDays,
+            streakDays = computedStreakStatus.currentStreak,
+            streakStatus = computedStreakStatus,
+            isStreakSheetOpen = hybrid.streakSheetOpen,
             reminderEnabled = persisted.reminderEnabled,
             teacherMood = overlay.mood,
             isTeacherSpeaking = overlay.speaking,
@@ -367,11 +508,15 @@ class ApexIeltsViewModel(application: Application) : AndroidViewModel(applicatio
             syntaxBreakdownState = overlay.syntaxBreakdown,
             speakingAiState = overlay.speakingAi,
             writingAiState = overlay.writingAi,
+            activeExamSubTab = overlay.examSubTab,
             customExams = mergedCustomExams,
             examHistory = persisted.examHistory,
             examParserState = overlay.examParser,
             activeExamSession = overlay.examSession,
             reviewDiffAiState = overlay.reviewDiffAi,
+            deepQuestionAiResults = overlay.deepQuestionAi,
+            loadingQuestionAnalysisIds = overlay.loadingQuestionIds,
+            questionAnalysisErrors = overlay.questionErrors,
             pendingPracticeSkill = overlay.pendingSkill,
             pendingPracticeFocusNote = overlay.pendingFocusNote,
             themePrefs = persisted.themePrefs,
@@ -394,7 +539,19 @@ class ApexIeltsViewModel(application: Application) : AndroidViewModel(applicatio
             isPersonalLibraryOpen = hybrid.libraryOpen,
             isBulkImporterOpen = hybrid.importerOpen,
             bulkImporterDataset = hybrid.importerDataset,
-            personalMaterialAiState = hybrid.materialAi
+            personalMaterialAiState = hybrid.materialAi,
+            personalGeminiApiKey = persisted.personalGeminiApiKey,
+            googleCseApiKey = persisted.googleCseApiKey,
+            googleCseCx = persisted.googleCseCx,
+            appCheckDiagnostics = appCheck,
+            isAuthLoaded = true,
+            userProfile = persisted.userProfile,
+            securityPrefs = persisted.securityPrefs,
+            isAppUnlocked = !persisted.securityPrefs.appLockEnabled || hybrid.sessionPinUnlocked,
+            isSecuritySheetOpen = hybrid.securitySheetOpen,
+            isAddMaterialsSheetOpen = hybrid.addMaterialsSheetOpen,
+            isAvatarPickerOpen = hybrid.avatarPickerOpen,
+            settingsFocusSchedule = hybrid.focusScheduleInSettings
         )
     }.stateIn(
         scope = viewModelScope,
@@ -410,6 +567,32 @@ class ApexIeltsViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             val legacyCustom = runCatching { repository.userStateFlow.first().customExams }.getOrDefault(emptyList())
             hybridRepository.ensureBundledSeedData(legacyCustomExams = legacyCustom)
+            checkStreakInactivityForToday()
+        }
+    }
+
+    private suspend fun checkStreakInactivityForToday() {
+        val todayIso = StreakManager.todayIsoDate()
+        todayIsoDateFlow.value = todayIso
+        val eval = repository.evaluateAndSyncStreakForToday(todayIso)
+        if (eval.didResetDueToInactivity && !eval.gentleResetMessageVi.isNullOrBlank()) {
+            triggerSpeakingPulse(TeacherMood.ENCOURAGING, durationMs = 5_500L)
+            snackbarMessage.value = eval.gentleResetMessageVi
+        }
+    }
+
+    fun openStreakSheet() {
+        isStreakSheetOpen.value = true
+    }
+
+    fun closeStreakSheet() {
+        isStreakSheetOpen.value = false
+    }
+
+    fun selectStreakVisualStyle(style: StreakVisualStyle) {
+        viewModelScope.launch {
+            repository.setStreakVisualStyle(style)
+            snackbarMessage.value = "Đã chuyển biểu tượng chuỗi học sang: ${style.labelVi}!"
         }
     }
 
@@ -426,10 +609,19 @@ class ApexIeltsViewModel(application: Application) : AndroidViewModel(applicatio
             StudyTab.ROADMAP -> TeacherMood.TEACHING
             StudyTab.LEARN -> TeacherMood.TEACHING
             StudyTab.PRACTICE -> TeacherMood.LISTENING
-            StudyTab.EXAM -> TeacherMood.ENCOURAGING
-            StudyTab.REVIEW -> TeacherMood.CHEERING
+            StudyTab.EXAM -> if (activeExamSubTab.value == ExamHubSubTab.CORRECTION) {
+                TeacherMood.CHEERING
+            } else {
+                TeacherMood.ENCOURAGING
+            }
         }
         triggerSpeakingPulse(tabMood, durationMs = 3_600L)
+    }
+
+    fun selectExamSubTab(subTab: ExamHubSubTab) {
+        activeExamSubTab.value = subTab
+        val mood = if (subTab == ExamHubSubTab.CORRECTION) TeacherMood.CHEERING else TeacherMood.ENCOURAGING
+        triggerSpeakingPulse(mood, durationMs = 3_200L)
     }
 
     fun selectModule(moduleId: Int) {
@@ -712,13 +904,14 @@ class ApexIeltsViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun submitMockExam(record: ExamAttemptRecord) {
         activeExamSession.value = null
+        activeExamSubTab.value = ExamHubSubTab.CORRECTION
         viewModelScope.launch {
             repository.recordExamAttempt(record)
             repository.markDailyHabitCompleted("habit_practice_15")
-            repository.setActiveTabIndex(StudyTab.REVIEW.index)
+            repository.setActiveTabIndex(StudyTab.EXAM.index)
             triggerSpeakingPulse(TeacherMood.CHEERING, durationMs = 4_800L)
             snackbarMessage.value =
-                "Đã nộp bài! Dự đoán Band ${String.format(Locale.US, "%.1f", record.estimatedBand)} — Đang mở Tab 5: Sửa bài!"
+                "Đã nộp bài! Dự đoán Band ${String.format(Locale.US, "%.1f", record.estimatedBand)} — Đang mở Đề thi → Chữa đề!"
         }
     }
 
@@ -819,6 +1012,37 @@ class ApexIeltsViewModel(application: Application) : AndroidViewModel(applicatio
         reviewDiffAiState.value = ReviewDiffAiUiState.Idle
     }
 
+    fun generateDeepQuestionAnalysis(item: ReviewErrorLogItem) {
+        if (item.id in loadingQuestionAnalysisIds.value) return
+        viewModelScope.launch {
+            loadingQuestionAnalysisIds.value = loadingQuestionAnalysisIds.value + item.id
+            questionAnalysisErrors.value = questionAnalysisErrors.value - item.id
+            triggerSpeakingPulse(TeacherMood.TEACHING, durationMs = 6_000L)
+            try {
+                val result = reviewDiffAiService.generateDeepQuestionAnalysis(
+                    skillLabel = item.skill.labelEn,
+                    questionTypeVi = item.questionTypeVi,
+                    promptEn = item.promptEn,
+                    userAnswer = item.userAnswer,
+                    correctAnswer = item.correctAnswer,
+                    passageExcerptEn = item.passageExcerptEn
+                )
+                deepQuestionAiResults.value = deepQuestionAiResults.value + (item.id to result)
+                triggerSpeakingPulse(TeacherMood.CHEERING, durationMs = 3_600L)
+                snackbarMessage.value = "Gemini AI đã phân tích chuyên sâu Câu ${item.questionNumber}!"
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                questionAnalysisErrors.value = questionAnalysisErrors.value + (
+                    item.id to (e.message ?: "Không thể phân tích sâu câu này lúc này. Vui lòng thử lại.")
+                )
+                triggerSpeakingPulse(TeacherMood.ENCOURAGING, durationMs = 3_000L)
+            } finally {
+                loadingQuestionAnalysisIds.value = loadingQuestionAnalysisIds.value - item.id
+            }
+        }
+    }
+
     fun practiceWeakSkillFromReview(skill: PracticeSkill, focusNoteVi: String) {
         pendingPracticeSkill.value = skill
         pendingPracticeFocusNote.value = focusNoteVi
@@ -862,6 +1086,66 @@ class ApexIeltsViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    fun selectThemePreset(preset: AppThemePreset) {
+        viewModelScope.launch {
+            repository.setThemePreset(preset)
+            snackbarMessage.value = "Đã áp dụng chủ đề: ${preset.titleVi}"
+        }
+    }
+
+    fun setCustomPrimaryColor(colorHex: Long?) {
+        viewModelScope.launch {
+            repository.setCustomPrimaryColorHex(colorHex)
+        }
+    }
+
+    fun setCustomSurfaceColor(colorHex: Long?) {
+        viewModelScope.launch {
+            repository.setCustomSurfaceColorHex(colorHex)
+        }
+    }
+
+    fun selectWallpaperPattern(pattern: AppWallpaperPattern) {
+        viewModelScope.launch {
+            repository.setWallpaperPattern(pattern)
+        }
+    }
+
+    fun setCustomBackgroundImageUri(uri: Uri) {
+        viewModelScope.launch {
+            val ctx = getApplication<Application>().applicationContext
+            val result = WallpaperStorageHelper.persistPickedWallpaper(ctx, uri)
+            result.onSuccess { savedPath ->
+                repository.setCustomBackgroundPath(savedPath)
+                snackbarMessage.value = "Đã áp dụng hình nền cá nhân cho Master Ielts!"
+            }.onFailure { err ->
+                snackbarMessage.value = "Không thể tải ảnh nền: ${err.message ?: "Lỗi đọc tệp"}"
+            }
+        }
+    }
+
+    fun clearCustomBackgroundImage() {
+        viewModelScope.launch {
+            WallpaperStorageHelper.clearPersistedWallpapers(getApplication<Application>().applicationContext)
+            repository.setCustomBackgroundPath("")
+            snackbarMessage.value = "Đã xóa hình nền tùy chỉnh."
+        }
+    }
+
+    fun setBackgroundOverlayOpacity(opacity: Float) {
+        viewModelScope.launch {
+            repository.setBackgroundOverlayOpacity(opacity)
+        }
+    }
+
+    fun resetThemeToDefault() {
+        viewModelScope.launch {
+            WallpaperStorageHelper.clearPersistedWallpapers(getApplication<Application>().applicationContext)
+            repository.resetThemeCustomization()
+            snackbarMessage.value = "Đã khôi phục giao diện mặc định Indigo Sắc Nét!"
+        }
+    }
+
     // --- Offline-First Hybrid Data, Google Sheets Cloud Sync & Backup Actions ---
 
     fun openSettingsSheet() {
@@ -875,6 +1159,18 @@ class ApexIeltsViewModel(application: Application) : AndroidViewModel(applicatio
     fun updateGoogleSheetUrl(url: String) {
         viewModelScope.launch {
             repository.setGoogleSheetUrl(url)
+        }
+    }
+
+    fun saveGoogleCseConfig(apiKey: String, cx: String) {
+        viewModelScope.launch {
+            repository.saveGoogleCseConfig(apiKey = apiKey, cx = cx)
+            com.example.data.VocabImageRepository.clearCachedUrls(getApplication<Application>().applicationContext)
+            snackbarMessage.value = if (apiKey.isNotBlank() && cx.isNotBlank()) {
+                "Đã lưu Google Custom Search API — thẻ Từ mới sẽ ưu tiên ảnh từ Google!"
+            } else {
+                "Đã chuyển về chế độ mặc định miễn phí: Wikipedia & Wikimedia Commons!"
+            }
         }
     }
 
@@ -1158,9 +1454,85 @@ class ApexIeltsViewModel(application: Application) : AndroidViewModel(applicatio
         triggerSpeakingPulse(tone.teacherMood, durationMs = 3_200L)
     }
 
+    fun saveTestReminderSlot(existingId: String?, hour: Int, minute: Int, labelVi: String) {
+        val cleanLabel = labelVi.trim().ifBlank { "Thi thử CD-IELTS & Kiểm tra Module" }
+        val slot = ReminderSlot(
+            id = existingId ?: "test_slot_${UUID.randomUUID().toString().take(8)}",
+            hour = hour.coerceIn(0, 23),
+            minute = minute.coerceIn(0, 59),
+            labelVi = cleanLabel,
+            enabled = true
+        )
+        viewModelScope.launch {
+            repository.saveTestReminderSlot(slot)
+            snackbarMessage.value = "Đã lưu lịch kiểm tra ${slot.formattedTime()} – ${slot.labelVi}"
+        }
+    }
+
+    fun toggleTestReminderSlot(slotId: String) {
+        viewModelScope.launch {
+            repository.toggleTestReminderSlot(slotId)
+        }
+    }
+
+    fun deleteTestReminderSlot(slotId: String) {
+        viewModelScope.launch {
+            repository.deleteTestReminderSlot(slotId)
+            snackbarMessage.value = "Đã xóa lịch hẹn kiểm tra"
+        }
+    }
+
+    fun toggleTestRepeatDay(dayId: String) {
+        viewModelScope.launch {
+            repository.toggleTestRepeatDay(dayId)
+        }
+    }
+
+    fun openSettingsToSchedule() {
+        isNotificationSheetOpen.value = false
+        settingsFocusSchedule.value = true
+        isSettingsSheetOpen.value = true
+    }
+
+    fun clearSettingsFocusSchedule() {
+        settingsFocusSchedule.value = false
+    }
+
+    fun openAvatarPicker() {
+        isAvatarPickerOpen.value = true
+    }
+
+    fun closeAvatarPicker() {
+        isAvatarPickerOpen.value = false
+    }
+
+    fun selectAvatarPreset(presetId: String) {
+        viewModelScope.launch {
+            repository.selectAvatarPreset(presetId)
+            snackbarMessage.value = if (presetId.isBlank()) {
+                "Đã đặt lại ảnh đại diện theo chữ cái tên."
+            } else {
+                "Đã cập nhật ảnh đại diện mới!"
+            }
+        }
+    }
+
+    fun saveCustomAvatarFromUri(uri: Uri) {
+        viewModelScope.launch {
+            repository.saveCustomAvatarFromUri(uri)
+                .onSuccess {
+                    snackbarMessage.value = "Đã lưu ảnh đại diện từ thiết bị thành công!"
+                }
+                .onFailure { err ->
+                    snackbarMessage.value = err.message ?: "Không thể lưu ảnh đại diện. Vui lòng thử ảnh khác."
+                }
+        }
+    }
+
     fun sendTestNotificationNow() {
         val state = uiState.value
         val sampleSlot = state.notificationPrefs.slots.firstOrNull { it.enabled }
+            ?: state.notificationPrefs.testSlots.firstOrNull { it.enabled }
             ?: state.notificationPrefs.slots.firstOrNull()
             ?: DefaultHabitData.defaultSlots.first()
 
@@ -1190,24 +1562,36 @@ class ApexIeltsViewModel(application: Application) : AndroidViewModel(applicatio
 
     private fun startRealtimeReminderWatcher() {
         viewModelScope.launch {
+            var lastCheckedIso = StreakManager.todayIsoDate()
             while (true) {
                 delay(15_000L)
+                val currentIso = StreakManager.todayIsoDate()
+                if (currentIso != lastCheckedIso) {
+                    lastCheckedIso = currentIso
+                    checkStreakInactivityForToday()
+                }
                 val state = uiState.value
                 val prefs = state.notificationPrefs
                 if (!prefs.masterEnabled) continue
 
                 val todayId = WeekdayItem.today().id
-                if (!prefs.repeatDays.contains(todayId)) continue
-
                 val cal = Calendar.getInstance()
                 val hour = cal.get(Calendar.HOUR_OF_DAY)
                 val minute = cal.get(Calendar.MINUTE)
                 val minuteKey = "${DefaultHabitData.currentDateKey()}-$hour:$minute"
                 if (lastFiredMinuteKey == minuteKey) continue
 
-                val matchingSlot = prefs.slots.firstOrNull {
-                    it.enabled && it.hour == hour && it.minute == minute
+                val matchingVocabSlot = if (prefs.repeatDays.contains(todayId)) {
+                    prefs.slots.firstOrNull { it.enabled && it.hour == hour && it.minute == minute }
+                } else {
+                    null
                 }
+                val matchingTestSlot = if (prefs.testRepeatDays.contains(todayId)) {
+                    prefs.testSlots.firstOrNull { it.enabled && it.hour == hour && it.minute == minute }
+                } else {
+                    null
+                }
+                val matchingSlot = matchingVocabSlot ?: matchingTestSlot
                 if (matchingSlot != null) {
                     lastFiredMinuteKey = minuteKey
                     dispatchReminderNotification(
@@ -1253,6 +1637,194 @@ class ApexIeltsViewModel(application: Application) : AndroidViewModel(applicatio
         bannerAutoDismissJob = viewModelScope.launch {
             delay(6_500L)
             activePushBanner.value = null
+        }
+    }
+
+    fun savePersonalGeminiApiKey(apiKey: String) {
+        val cleaned = apiKey.trim()
+        GeminiResilientClient.personalGeminiApiKey = cleaned
+        viewModelScope.launch {
+            repository.setPersonalGeminiApiKey(cleaned)
+        }
+        snackbarMessage.value = if (cleaned.isNotEmpty()) {
+            "Đã lưu Gemini API Key cá nhân cho chế độ dự phòng Sideload!"
+        } else {
+            "Đã xóa Gemini API Key cá nhân. Ứng dụng sẽ ưu tiên Firebase AI Logic."
+        }
+    }
+
+    // =========================================================================
+    // Authentication, Account Sidebar Sheets, App Lock Security & Reset Progress
+    // =========================================================================
+
+    fun openSecuritySheet() {
+        isSecuritySheetOpen.value = true
+    }
+
+    fun closeSecuritySheet() {
+        isSecuritySheetOpen.value = false
+    }
+
+    fun openAddMaterialsSheet() {
+        isAddMaterialsSheetOpen.value = true
+    }
+
+    fun closeAddMaterialsSheet() {
+        isAddMaterialsSheetOpen.value = false
+    }
+
+    fun registerWithEmail(
+        displayName: String,
+        email: String,
+        password: String,
+        onResult: (Result<UserAccountProfile>) -> Unit
+    ) {
+        viewModelScope.launch {
+            val result = repository.registerLocalAccount(displayName, email, password)
+            result.onSuccess { profile ->
+                isSessionPinUnlocked.value = true
+                triggerSpeakingPulse(TeacherMood.CHEERING, durationMs = 4_000L)
+                snackbarMessage.value = "Chào mừng ${profile.displayName} đến với Master Ielts!"
+            }
+            onResult(result)
+        }
+    }
+
+    fun loginWithEmail(
+        email: String,
+        password: String,
+        onResult: (Result<UserAccountProfile>) -> Unit
+    ) {
+        viewModelScope.launch {
+            val result = repository.loginLocalAccount(email, password)
+            result.onSuccess { profile ->
+                isSessionPinUnlocked.value = true
+                triggerSpeakingPulse(TeacherMood.CHEERING, durationMs = 4_000L)
+                snackbarMessage.value = "Chào mừng trở lại, ${profile.displayName}!"
+            }
+            onResult(result)
+        }
+    }
+
+    fun completeGoogleSignIn(
+        uid: String,
+        displayName: String,
+        email: String,
+        isFallbackMode: Boolean
+    ) {
+        viewModelScope.launch {
+            val profile = repository.saveGoogleSignInSession(
+                uid = uid,
+                displayName = displayName,
+                email = email,
+                isFallbackMode = isFallbackMode
+            )
+            isSessionPinUnlocked.value = true
+            triggerSpeakingPulse(TeacherMood.CHEERING, durationMs = 4_000L)
+            snackbarMessage.value = if (isFallbackMode) {
+                "Đã kết nối hồ sơ Google Offline/Dev: ${profile.email}"
+            } else {
+                "Đã kết nối tài khoản Google AI: ${profile.email}"
+            }
+        }
+    }
+
+    fun logoutAccount() {
+        viewModelScope.launch {
+            GoogleAuthHelper.signOutGoogle(getApplication<Application>().applicationContext)
+            repository.clearLoginSession()
+            isSettingsSheetOpen.value = false
+            isSecuritySheetOpen.value = false
+            isAddMaterialsSheetOpen.value = false
+            isPersonalLibraryOpen.value = false
+            isNotificationSheetOpen.value = false
+            isThemeSheetOpen.value = false
+            isStreakSheetOpen.value = false
+            isAvatarPickerOpen.value = false
+            settingsFocusSchedule.value = false
+            snackbarMessage.value = "Đã đăng xuất khỏi tài khoản Master Ielts."
+        }
+    }
+
+    fun changeAccountPassword(
+        currentPassword: String,
+        newPassword: String,
+        onResult: (Result<Unit>) -> Unit
+    ) {
+        viewModelScope.launch {
+            val res = repository.changeLocalAccountPassword(currentPassword, newPassword)
+            res.onSuccess {
+                snackbarMessage.value = "Đã cập nhật mật khẩu tài khoản an toàn!"
+            }
+            onResult(res)
+        }
+    }
+
+    fun configureAppLockPin(
+        pin: String,
+        enableLock: Boolean = true,
+        onResult: (Result<Unit>) -> Unit
+    ) {
+        viewModelScope.launch {
+            val res = repository.configureAppLockPin(pin, enableLock)
+            res.onSuccess {
+                isSessionPinUnlocked.value = true
+                snackbarMessage.value = "Đã lưu mã PIN 4 chữ số & bật Khóa ứng dụng!"
+            }
+            onResult(res)
+        }
+    }
+
+    fun toggleAppLock(enabled: Boolean) {
+        viewModelScope.launch {
+            repository.setAppLockEnabled(enabled)
+            if (enabled) {
+                isSessionPinUnlocked.value = true
+            }
+            snackbarMessage.value = if (enabled) {
+                "Đã bật Khóa ứng dụng Master Ielts."
+            } else {
+                "Đã tắt Khóa ứng dụng."
+            }
+        }
+    }
+
+    fun toggleBiometricLock(enabled: Boolean) {
+        viewModelScope.launch {
+            repository.setBiometricLockEnabled(enabled)
+            snackbarMessage.value = if (enabled) {
+                "Đã bật mở khóa bằng Sinh trắc học."
+            } else {
+                "Đã tắt mở khóa Sinh trắc học."
+            }
+        }
+    }
+
+    fun verifyPinAndUnlock(pin: String, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            val valid = repository.verifyAppLockPin(pin)
+            if (valid) {
+                isSessionPinUnlocked.value = true
+                snackbarMessage.value = "Đã mở khóa Master Ielts!"
+            }
+            onResult(valid)
+        }
+    }
+
+    fun unlockWithBiometricSuccess() {
+        isSessionPinUnlocked.value = true
+        snackbarMessage.value = "Xác thực sinh trắc học thành công!"
+    }
+
+    fun resetStudyProgress() {
+        viewModelScope.launch {
+            repository.resetStudyProgress()
+            hybridRepository.addStudyLog(
+                category = "System",
+                summaryVi = "Đặt lại tiến độ học tập (Streak, Module, SRS, Lịch sử thi)"
+            )
+            triggerSpeakingPulse(TeacherMood.ENCOURAGING, durationMs = 4_000L)
+            snackbarMessage.value = "Đã đặt lại tiến độ học tập về trạng thái ban đầu!"
         }
     }
 

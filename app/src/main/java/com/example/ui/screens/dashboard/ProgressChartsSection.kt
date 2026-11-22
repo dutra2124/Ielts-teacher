@@ -79,7 +79,9 @@ import com.example.data.HeatmapDayCell
 import com.example.data.JourneyMilestone
 import com.example.data.PracticeSkill
 import com.example.data.SkillBandProgress
+import com.example.data.StreakStatus
 import com.example.data.WeeklyBarDay
+import com.example.ui.components.MasteryStreakIcon
 import com.example.ui.theme.CardBorderSoft
 import com.example.ui.theme.CardSurfaceTinted
 import com.example.ui.theme.CardWhite
@@ -105,9 +107,14 @@ import com.example.ui.theme.StreakBg
 import com.example.ui.theme.StreakOrange
 import com.example.ui.theme.SurfaceCanvas
 import com.example.ui.theme.TealOnSurface
+import com.example.ui.theme.ThemeOnPrimary
+import com.example.ui.theme.ThemePrimary
+import com.example.ui.theme.ThemeSecondary
 import com.example.ui.theme.VividViolet
 import com.example.ui.theme.VividVioletLight
 import java.util.Locale
+import kotlin.math.cos
+import kotlin.math.sin
 
 /**
  * 1. Diligence Score Card ("Chỉ số chăm chỉ") with animated 0–100% radial gauge,
@@ -117,19 +124,45 @@ import java.util.Locale
 fun DiligenceScoreCard(
     snapshot: DiligenceDashboardSnapshot,
     streakDays: Int,
+    streakStatus: StreakStatus = StreakStatus(currentStreak = streakDays),
+    onOpenStreakSheet: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val apexColors = LocalApexColors.current
+    val primary = ThemePrimary
+    val secondary = ThemeSecondary
+
     var entered by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { entered = true }
 
     val animatedScore by animateIntAsState(
         targetValue = if (entered) snapshot.diligenceScore else 0,
-        animationSpec = tween(durationMillis = 850, easing = FastOutSlowInEasing),
+        animationSpec = tween(durationMillis = 950, easing = FastOutSlowInEasing),
         label = "diligence_score_int"
+    )
+    val animatedStreak by animateIntAsState(
+        targetValue = if (entered) streakDays else 0,
+        animationSpec = tween(durationMillis = 850, easing = FastOutSlowInEasing),
+        label = "diligence_streak_int"
+    )
+    val animatedGoalRate by animateIntAsState(
+        targetValue = if (entered) snapshot.dailyGoalRate else 0,
+        animationSpec = tween(durationMillis = 900, easing = FastOutSlowInEasing),
+        label = "diligence_goal_int"
+    )
+    val animatedVocabCount by animateIntAsState(
+        targetValue = if (entered) snapshot.vocabReviewedCount else 0,
+        animationSpec = tween(durationMillis = 950, easing = FastOutSlowInEasing),
+        label = "diligence_vocab_int"
+    )
+    val animatedWeeklyMins by animateIntAsState(
+        targetValue = if (entered) snapshot.weeklyMinutesTotal else 0,
+        animationSpec = tween(durationMillis = 1000, easing = FastOutSlowInEasing),
+        label = "diligence_weekly_mins_int"
     )
     val animatedSweep by animateFloatAsState(
         targetValue = if (entered) snapshot.diligenceScore / 100f else 0f,
-        animationSpec = tween(durationMillis = 900, easing = FastOutSlowInEasing),
+        animationSpec = tween(durationMillis = 1000, easing = FastOutSlowInEasing),
         label = "diligence_gauge_sweep"
     )
 
@@ -143,6 +176,15 @@ fun DiligenceScoreCard(
         ),
         label = "badge_glow"
     )
+    val orbPulse by pulseTransition.animateFloat(
+        initialValue = 0.85f,
+        targetValue = 1.25f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1150, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "gauge_orb_pulse"
+    )
 
     val trackColor = SurfaceCanvas
 
@@ -152,12 +194,12 @@ fun DiligenceScoreCard(
             .shadow(
                 elevation = 8.dp,
                 shape = RoundedCornerShape(24.dp),
-                ambientColor = ElectricIndigo.copy(alpha = 0.08f)
+                ambientColor = primary.copy(alpha = 0.10f)
             )
             .testTag("diligence_score_card"),
         shape = RoundedCornerShape(24.dp),
         color = CardWhite,
-        border = BorderStroke(1.dp, CardBorderSoft)
+        border = BorderStroke(if (apexColors.isHighContrast) 1.5.dp else 1.dp, CardBorderSoft)
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -181,15 +223,16 @@ fun DiligenceScoreCard(
                     Text(
                         text = snapshot.gradeLabelVi,
                         style = MaterialTheme.typography.bodySmall,
-                        color = IndigoOnSurface,
-                        maxLines = 2
+                        color = primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
                 Surface(
                     shape = RoundedCornerShape(50),
                     color = GoldMasteryLight.copy(alpha = badgeGlow),
-                    border = BorderStroke(1.dp, GoldMastery.copy(alpha = 0.45f))
+                    border = BorderStroke(1.dp, GoldMastery.copy(alpha = 0.50f))
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
@@ -203,7 +246,7 @@ fun DiligenceScoreCard(
                             modifier = Modifier.size(15.dp)
                         )
                         Text(
-                            text = if (snapshot.diligenceScore >= 75) "Học viên xuất sắc" else "Bền bỉ mỗi ngày",
+                            text = if (snapshot.diligenceScore >= 75) "Xuất sắc" else "Bền bỉ",
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                             color = GoldOnContainer
                         )
@@ -211,20 +254,30 @@ fun DiligenceScoreCard(
                 }
             }
 
-            // Radial Gauge + 4 Pastel Metric Tiles
+            // Animated Radial Gauge + 4 Animated Count-Up Metric Tiles
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 Box(
-                    modifier = Modifier.size(112.dp),
+                    modifier = Modifier.size(116.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Canvas(modifier = Modifier.size(112.dp)) {
+                    Canvas(modifier = Modifier.size(116.dp)) {
                         val strokeW = 12.dp.toPx()
-                        val pad = strokeW / 2f
-                        val arcSize = Size(size.width - strokeW, size.height - strokeW)
+                        val pad = strokeW / 2f + 4.dp.toPx()
+                        val arcSize = Size(size.width - pad * 2f, size.height - pad * 2f)
+                        val radius = arcSize.width / 2f
+                        val center = Offset(size.width / 2f, size.height / 2f)
+
+                        // Soft pulsing outer aura
+                        drawCircle(
+                            color = primary.copy(alpha = 0.08f * badgeGlow),
+                            radius = radius + 6.dp.toPx(),
+                            center = center
+                        )
+                        // Background track arc
                         drawArc(
                             color = trackColor,
                             startAngle = 135f,
@@ -234,17 +287,35 @@ fun DiligenceScoreCard(
                             size = arcSize,
                             style = Stroke(width = strokeW, cap = StrokeCap.Round)
                         )
+                        // Illuminated sweep arc
+                        val sweepDeg = 270f * animatedSweep
                         drawArc(
                             brush = Brush.sweepGradient(
-                                listOf(CyanGlow, ElectricIndigo, VividViolet, StreakOrange)
+                                listOf(CyanGlow, primary, secondary, StreakOrange)
                             ),
                             startAngle = 135f,
-                            sweepAngle = 270f * animatedSweep,
+                            sweepAngle = sweepDeg,
                             useCenter = false,
                             topLeft = Offset(pad, pad),
                             size = arcSize,
                             style = Stroke(width = strokeW, cap = StrokeCap.Round)
                         )
+                        // Luminous glowing tip orb at end of active arc
+                        if (animatedSweep > 0.02f) {
+                            val angleRad = Math.toRadians((135f + sweepDeg).toDouble())
+                            val tipX = center.x + radius * cos(angleRad).toFloat()
+                            val tipY = center.y + radius * sin(angleRad).toFloat()
+                            drawCircle(
+                                color = primary.copy(alpha = 0.30f),
+                                radius = 9.dp.toPx() * orbPulse,
+                                center = Offset(tipX, tipY)
+                            )
+                            drawCircle(
+                                color = Color.White,
+                                radius = 4.5.dp.toPx(),
+                                center = Offset(tipX, tipY)
+                            )
+                        }
                     }
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
@@ -273,7 +344,7 @@ fun DiligenceScoreCard(
                     ) {
                         PastelMetricPill(
                             icon = Icons.Rounded.LocalFireDepartment,
-                            value = "${streakDays} ngày",
+                            value = "$animatedStreak ngày",
                             label = "Chuỗi học",
                             container = StreakBg,
                             accent = StreakOrange,
@@ -281,7 +352,7 @@ fun DiligenceScoreCard(
                         )
                         PastelMetricPill(
                             icon = Icons.Rounded.TaskAlt,
-                            value = "${snapshot.dailyGoalRate}%",
+                            value = "$animatedGoalRate%",
                             label = "Mục tiêu ngày",
                             container = EmeraldSuccessLight,
                             accent = EmeraldOnContainer,
@@ -294,7 +365,7 @@ fun DiligenceScoreCard(
                     ) {
                         PastelMetricPill(
                             icon = Icons.Rounded.MenuBook,
-                            value = "${snapshot.vocabReviewedCount} từ",
+                            value = "$animatedVocabCount từ",
                             label = "Từ C1–C2 ôn",
                             container = ElectricIndigoLight,
                             accent = IndigoOnSurface,
@@ -302,11 +373,76 @@ fun DiligenceScoreCard(
                         )
                         PastelMetricPill(
                             icon = Icons.Rounded.Schedule,
-                            value = "${snapshot.weeklyMinutesTotal}p",
+                            value = "${animatedWeeklyMins}p",
                             label = "Phút tuần này",
                             container = PracticeTealLight,
                             accent = TealOnSurface,
                             modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+
+            // Prominent 64dp Evolving Mastery Streak Stage Banner (clickable to inspect 6 evolution stages)
+            val mastery = streakStatus.masteryLevel
+            val masteryAccent = mastery.accentFor(streakStatus.visualStyle)
+            Surface(
+                shape = RoundedCornerShape(18.dp),
+                color = SurfaceCanvas,
+                border = BorderStroke(1.2.dp, masteryAccent.copy(alpha = 0.35f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(18.dp))
+                    .clickable(onClick = onOpenStreakSheet)
+                    .testTag("dashboard_mastery_streak_banner")
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = CardWhite,
+                        border = BorderStroke(1.dp, masteryAccent.copy(alpha = 0.30f)),
+                        modifier = Modifier.size(76.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            MasteryStreakIcon(
+                                streakDays = streakStatus.currentStreak,
+                                style = streakStatus.visualStyle,
+                                size = 64.dp,
+                                contentDescriptionText = mastery.titleVi
+                            )
+                        }
+                    }
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        Text(
+                            text = "Cấp ${mastery.stageIndex + 1}/6 • ${mastery.titleVi}",
+                            style = MaterialTheme.typography.titleSmall.copy(
+                                fontFamily = PlusJakartaSansFontFamily,
+                                fontWeight = FontWeight.ExtraBold
+                            ),
+                            color = masteryAccent
+                        )
+                        Text(
+                            text = "${mastery.stageNameFor(streakStatus.visualStyle)} (${streakStatus.currentStreak} ngày)",
+                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                            color = InkPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = "Chạm để xem 6 mốc tiến hóa & đổi Cái cây / Ngọn lửa",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = InkMuted,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -416,14 +552,23 @@ fun ConsistencyHeatmapCard(
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(7.dp)
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.weight(1f)
                 ) {
-                    Icon(
-                        imageVector = Icons.Rounded.CalendarMonth,
-                        contentDescription = null,
-                        tint = VividViolet,
-                        modifier = Modifier.size(20.dp)
-                    )
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(VividVioletLight),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.CalendarMonth,
+                            contentDescription = null,
+                            tint = VividViolet,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
                     Column {
                         Text(
                             text = "Lịch nhiệt 28 ngày",
@@ -571,8 +716,16 @@ fun WeeklyStudyActivityChartCard(
     weeklyMinutesTotal: Int,
     modifier: Modifier = Modifier
 ) {
+    val primary = ThemePrimary
+    val secondary = ThemeSecondary
     var entered by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { entered = true }
+
+    val animatedWeeklyTotal by animateIntAsState(
+        targetValue = if (entered) weeklyMinutesTotal else 0,
+        animationSpec = tween(durationMillis = 900, easing = FastOutSlowInEasing),
+        label = "weekly_total_minutes"
+    )
 
     val maxMinutes = remember(bars, dailyTargetMinutes) {
         (bars.maxOfOrNull { it.minutes } ?: dailyTargetMinutes)
@@ -589,7 +742,7 @@ fun WeeklyStudyActivityChartCard(
             .testTag("weekly_activity_chart_card"),
         shape = RoundedCornerShape(24.dp),
         color = CardWhite,
-        border = BorderStroke(1.dp, CardBorderSoft)
+        border = BorderStroke(if (LocalApexColors.current.isHighContrast) 1.5.dp else 1.dp, CardBorderSoft)
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -602,14 +755,23 @@ fun WeeklyStudyActivityChartCard(
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(7.dp)
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.weight(1f)
                 ) {
-                    Icon(
-                        imageVector = Icons.Rounded.BarChart,
-                        contentDescription = null,
-                        tint = ElectricIndigo,
-                        modifier = Modifier.size(20.dp)
-                    )
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(ElectricIndigoLight),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.BarChart,
+                            contentDescription = null,
+                            tint = primary,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
                     Column {
                         Text(
                             text = "Hoạt động học 7 ngày (T2–CN)",
@@ -620,7 +782,7 @@ fun WeeklyStudyActivityChartCard(
                             color = InkPrimary
                         )
                         Text(
-                            text = "Đường nét đứt cam = Mục tiêu ${dailyTargetMinutes} phút/ngày",
+                            text = "Mục tiêu ${dailyTargetMinutes} phút/ngày",
                             style = MaterialTheme.typography.bodySmall,
                             color = InkMuted
                         )
@@ -632,7 +794,7 @@ fun WeeklyStudyActivityChartCard(
                     color = CyanGlowLight
                 ) {
                     Text(
-                        text = "${weeklyMinutesTotal}p / tuần",
+                        text = "${animatedWeeklyTotal}p / tuần",
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                         color = TealOnSurface,
                         modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
@@ -705,9 +867,9 @@ fun WeeklyStudyActivityChartCard(
                                         .clip(RoundedCornerShape(10.dp))
                                         .background(
                                             brush = when {
-                                                bar.isToday -> Brush.verticalGradient(listOf(CyanGlow, ElectricIndigo))
-                                                reachedTarget -> Brush.verticalGradient(listOf(VividViolet, ElectricIndigo))
-                                                else -> Brush.verticalGradient(listOf(ElectricIndigo.copy(alpha = 0.45f), ElectricIndigo.copy(alpha = 0.65f)))
+                                                bar.isToday -> Brush.verticalGradient(listOf(CyanGlow, primary))
+                                                reachedTarget -> Brush.verticalGradient(listOf(secondary, primary))
+                                                else -> Brush.verticalGradient(listOf(primary.copy(alpha = 0.45f), primary.copy(alpha = 0.65f)))
                                             }
                                         )
                                 )
@@ -738,13 +900,16 @@ fun SkillRadarAndJourneyCard(
     onSkillClick: (PracticeSkill) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val apexColors = LocalApexColors.current
+    val primary = ThemePrimary
+    val onPrimary = ThemeOnPrimary
     var entered by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { entered = true }
 
     val gridColor = CardBorderSoft
-    val radarFill = ElectricIndigo.copy(alpha = 0.24f)
-    val radarStroke = ElectricIndigo
-    val targetStroke = EmeraldSuccess.copy(alpha = 0.55f)
+    val radarFill = primary.copy(alpha = 0.24f)
+    val radarStroke = primary
+    val targetStroke = EmeraldSuccess.copy(alpha = 0.60f)
 
     Surface(
         modifier = modifier
@@ -752,7 +917,7 @@ fun SkillRadarAndJourneyCard(
             .testTag("skill_radar_and_journey_card"),
         shape = RoundedCornerShape(24.dp),
         color = CardWhite,
-        border = BorderStroke(1.dp, CardBorderSoft)
+        border = BorderStroke(if (apexColors.isHighContrast) 1.5.dp else 1.dp, CardBorderSoft)
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -760,14 +925,22 @@ fun SkillRadarAndJourneyCard(
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(7.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Rounded.Radar,
-                    contentDescription = null,
-                    tint = PracticeTeal,
-                    modifier = Modifier.size(20.dp)
-                )
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(PracticeTealLight),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Radar,
+                        contentDescription = null,
+                        tint = PracticeTeal,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
                 Column {
                     Text(
                         text = "Biểu đồ 4 kỹ năng (6.0 → 8.5)",
@@ -903,32 +1076,45 @@ fun SkillRadarAndJourneyCard(
                 )
             }
 
-            // 4 Skill Progress Bars (tap any skill to jump to Tab 3 Practice!)
+            // 4 Skill Animated Progress Bars with Count-Up Band & Percentage
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 skills.forEach { sk ->
                     val frac = ((sk.currentBand - 5.5f) / (sk.targetBand - 5.5f)).coerceIn(0.12f, 1f)
+                    val targetPct = ((sk.currentBand / sk.targetBand) * 100f).toInt().coerceIn(0, 100)
                     val animFrac by animateFloatAsState(
-                        targetValue = if (entered) frac else 0.08f,
-                        animationSpec = tween(750, easing = FastOutSlowInEasing),
+                        targetValue = if (entered) frac else 0.06f,
+                        animationSpec = tween(850, easing = FastOutSlowInEasing),
                         label = "skill_bar_${sk.skill.name}"
                     )
+                    val animBand by animateFloatAsState(
+                        targetValue = if (entered) sk.currentBand else 5.0f,
+                        animationSpec = tween(900, easing = FastOutSlowInEasing),
+                        label = "skill_band_${sk.skill.name}"
+                    )
+                    val animPct by animateIntAsState(
+                        targetValue = if (entered) targetPct else 0,
+                        animationSpec = tween(900, easing = FastOutSlowInEasing),
+                        label = "skill_pct_${sk.skill.name}"
+                    )
                     val barColor = when (sk.skill) {
-                        PracticeSkill.LISTENING -> ElectricIndigo
+                        PracticeSkill.LISTENING -> primary
                         PracticeSkill.READING -> PracticeTeal
                         PracticeSkill.WRITING -> VividViolet
                         PracticeSkill.SPEAKING -> StreakOrange
                     }
                     Surface(
-                        shape = RoundedCornerShape(14.dp),
+                        shape = RoundedCornerShape(16.dp),
                         color = CardSurfaceTinted,
+                        border = BorderStroke(1.dp, CardBorderSoft),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
+                            .clip(RoundedCornerShape(16.dp))
                             .clickable { onSkillClick(sk.skill) }
+                            .testTag("dashboard_skill_bar_${sk.skill.name.lowercase()}")
                     ) {
                         Column(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
-                            verticalArrangement = Arrangement.spacedBy(5.dp)
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -937,37 +1123,65 @@ fun SkillRadarAndJourneyCard(
                             ) {
                                 Text(
                                     text = sk.labelVi,
-                                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                                    color = InkPrimary
-                                )
-                                Text(
-                                    text = "Band ${String.format(Locale.US, "%.1f", sk.currentBand)} / 8.5",
-                                    style = MaterialTheme.typography.labelMedium.copy(
+                                    style = MaterialTheme.typography.labelLarge.copy(
                                         fontFamily = PlusJakartaSansFontFamily,
                                         fontWeight = FontWeight.ExtraBold
                                     ),
-                                    color = barColor
+                                    color = InkPrimary
                                 )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text(
+                                        text = "Band ${String.format(Locale.US, "%.1f", animBand)} / 8.5",
+                                        style = MaterialTheme.typography.labelMedium.copy(
+                                            fontFamily = PlusJakartaSansFontFamily,
+                                            fontWeight = FontWeight.ExtraBold
+                                        ),
+                                        color = barColor
+                                    )
+                                    Surface(
+                                        shape = RoundedCornerShape(50),
+                                        color = barColor.copy(alpha = 0.14f)
+                                    ) {
+                                        Text(
+                                            text = "$animPct%",
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                fontWeight = FontWeight.ExtraBold,
+                                                fontSize = 10.sp
+                                            ),
+                                            color = barColor,
+                                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
                             }
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(8.dp)
+                                    .height(10.dp)
                                     .clip(RoundedCornerShape(50))
                                     .background(SurfaceCanvas)
                             ) {
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth(animFrac)
-                                        .height(8.dp)
+                                        .height(10.dp)
                                         .clip(RoundedCornerShape(50))
-                                        .background(barColor)
+                                        .background(
+                                            Brush.horizontalGradient(
+                                                listOf(barColor.copy(alpha = 0.78f), barColor)
+                                            )
+                                        )
                                 )
                             }
                             Text(
                                 text = sk.noteVi,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = InkSecondary
+                                color = InkSecondary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
@@ -1010,7 +1224,7 @@ fun SkillRadarAndJourneyCard(
                                 shape = CircleShape,
                                 color = when {
                                     ms.isAchieved -> EmeraldSuccess
-                                    ms.isCurrentGoal -> ElectricIndigo
+                                    ms.isCurrentGoal -> primary
                                     else -> SurfaceCanvas
                                 },
                                 border = BorderStroke(
@@ -1035,7 +1249,7 @@ fun SkillRadarAndJourneyCard(
                                         Icon(
                                             imageVector = Icons.Rounded.AutoAwesome,
                                             contentDescription = null,
-                                            tint = Color.White,
+                                            tint = onPrimary,
                                             modifier = Modifier.size(14.dp)
                                         )
                                     }

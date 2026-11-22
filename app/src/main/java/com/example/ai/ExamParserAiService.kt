@@ -131,9 +131,15 @@ class ExamParserAiService {
             - Provide topicVi in clear Vietnamese and all academic exam text in English.
         """.trimIndent()
 
-        try {
-            val response = withTimeout(60_000L) {
-                if (pdfBytes != null) {
+        val fallbackPrompt = if (pdfBytes != null) {
+            instructions
+        } else {
+            "$instructions\n\n--- RAW EXAM CONTENT ---\n${trimmedText.take(12_000)}"
+        }
+
+        val rawJson = GeminiResilientClient.generateJsonWithFallback(
+            primaryCall = {
+                val response = if (pdfBytes != null) {
                     parserModel.generateContent(
                         content {
                             inlineData(pdfBytes, "application/pdf")
@@ -141,122 +147,126 @@ class ExamParserAiService {
                         }
                     )
                 } else {
-                    parserModel.generateContent(
-                        "$instructions\n\n--- RAW EXAM CONTENT ---\n${trimmedText.take(12_000)}"
+                    parserModel.generateContent(fallbackPrompt)
+                }
+                response.text
+            },
+            prompt = fallbackPrompt,
+            jsonSchemaHint = """
+                {
+                  "title": "string",
+                  "topicVi": "string",
+                  "topicEn": "string",
+                  "readingTitle": "string",
+                  "readingParagraphs": [{"label": "A", "sentences": ["string"]}],
+                  "listeningTitle": "string",
+                  "listeningScript": ["string"],
+                  "writingTask2Prompt": "string",
+                  "questions": [{"number": 1, "skill": "reading|listening", "type": "tfng|mcq|gap_fill", "promptEn": "string", "options": ["string"], "correctAnswer": "string"}]
+                }
+            """.trimIndent(),
+            pdfBytes = pdfBytes,
+            temperature = 0.2f,
+            maxOutputTokens = 1600,
+            timeoutMs = 60_000L,
+            operationLabelVi = "số hóa đề thi IELTS"
+        )
+
+        val json = JSONObject(rawJson)
+        val paragraphs = buildList {
+            val pArr = json.optJSONArray("readingParagraphs")
+            if (pArr != null) {
+                for (i in 0 until pArr.length()) {
+                    val pObj = pArr.optJSONObject(i) ?: continue
+                    val label = pObj.optString("label", ('A' + i).toString())
+                    val sArr = pObj.optJSONArray("sentences")
+                    val sentences = buildList {
+                        if (sArr != null) {
+                            for (j in 0 until sArr.length()) {
+                                val s = sArr.optString(j).trim()
+                                if (s.isNotEmpty()) add(s)
+                            }
+                        }
+                    }
+                    if (sentences.isNotEmpty()) add(ExamParagraph(label, sentences))
+                }
+            }
+        }.ifEmpty {
+            listOf(ExamParagraph("A", listOf(trimmedText.take(600).ifBlank { "Imported IELTS Reading passage." })))
+        }
+
+        val listeningLines = buildList {
+            val lArr = json.optJSONArray("listeningScript")
+            if (lArr != null) {
+                for (i in 0 until lArr.length()) {
+                    val line = lArr.optString(i).trim()
+                    if (line.isNotEmpty()) add(line)
+                }
+            }
+        }.ifEmpty {
+            listOf("Audio track ready. Press play once to complete the IELTS Listening section.")
+        }
+
+        val questions = buildList {
+            val qArr = json.optJSONArray("questions")
+            if (qArr != null) {
+                for (i in 0 until qArr.length()) {
+                    val qObj = qArr.optJSONObject(i) ?: continue
+                    val type = ExamQuestionType.fromId(qObj.optString("type"))
+                    val optArr = qObj.optJSONArray("options")
+                    val options = buildList {
+                        if (optArr != null) {
+                            for (j in 0 until optArr.length()) {
+                                val opt = optArr.optString(j).trim()
+                                if (opt.isNotEmpty()) add(opt)
+                            }
+                        }
+                    }.ifEmpty {
+                        if (type == ExamQuestionType.TFNG) listOf("TRUE", "FALSE", "NOT GIVEN") else emptyList()
+                    }
+                    val answer = qObj.optString("correctAnswer", "").trim()
+                    add(
+                        ExamQuestionItem(
+                            id = "aiq_${System.currentTimeMillis()}_${i + 1}",
+                            number = qObj.optInt("number", i + 1),
+                            skill = ExamQuestionSkill.fromId(qObj.optString("skill")),
+                            type = type,
+                            promptEn = qObj.optString("promptEn", "Question ${i + 1}"),
+                            options = options,
+                            correctAnswer = answer,
+                            acceptableAnswers = listOf(answer)
+                        )
                     )
                 }
             }
-
-            val rawJson = response.text
-                ?: throw IllegalStateException("AI Exam Parser không trả về dữ liệu. Vui lòng thử lại.")
-
-            val json = JSONObject(rawJson)
-            val paragraphs = buildList {
-                val pArr = json.optJSONArray("readingParagraphs")
-                if (pArr != null) {
-                    for (i in 0 until pArr.length()) {
-                        val pObj = pArr.optJSONObject(i) ?: continue
-                        val label = pObj.optString("label", ('A' + i).toString())
-                        val sArr = pObj.optJSONArray("sentences")
-                        val sentences = buildList {
-                            if (sArr != null) {
-                                for (j in 0 until sArr.length()) {
-                                    val s = sArr.optString(j).trim()
-                                    if (s.isNotEmpty()) add(s)
-                                }
-                            }
-                        }
-                        if (sentences.isNotEmpty()) add(ExamParagraph(label, sentences))
-                    }
-                }
-            }.ifEmpty {
-                listOf(ExamParagraph("A", listOf(trimmedText.take(600).ifBlank { "Imported IELTS Reading passage." })))
-            }
-
-            val listeningLines = buildList {
-                val lArr = json.optJSONArray("listeningScript")
-                if (lArr != null) {
-                    for (i in 0 until lArr.length()) {
-                        val line = lArr.optString(i).trim()
-                        if (line.isNotEmpty()) add(line)
-                    }
-                }
-            }.ifEmpty {
-                listOf("Audio track ready. Press play once to complete the IELTS Listening section.")
-            }
-
-            val questions = buildList {
-                val qArr = json.optJSONArray("questions")
-                if (qArr != null) {
-                    for (i in 0 until qArr.length()) {
-                        val qObj = qArr.optJSONObject(i) ?: continue
-                        val type = ExamQuestionType.fromId(qObj.optString("type"))
-                        val optArr = qObj.optJSONArray("options")
-                        val options = buildList {
-                            if (optArr != null) {
-                                for (j in 0 until optArr.length()) {
-                                    val opt = optArr.optString(j).trim()
-                                    if (opt.isNotEmpty()) add(opt)
-                                }
-                            }
-                        }.ifEmpty {
-                            if (type == ExamQuestionType.TFNG) listOf("TRUE", "FALSE", "NOT GIVEN") else emptyList()
-                        }
-                        val answer = qObj.optString("correctAnswer", "").trim()
-                        add(
-                            ExamQuestionItem(
-                                id = "aiq_${System.currentTimeMillis()}_${i + 1}",
-                                number = qObj.optInt("number", i + 1),
-                                skill = ExamQuestionSkill.fromId(qObj.optString("skill")),
-                                type = type,
-                                promptEn = qObj.optString("promptEn", "Question ${i + 1}"),
-                                options = options,
-                                correctAnswer = answer,
-                                acceptableAnswers = listOf(answer)
-                            )
-                        )
-                    }
-                }
-            }
-
-            ExamPaper(
-                id = "custom_${System.currentTimeMillis()}",
-                title = json.optString("title", sourceFileName ?: "Đề IELTS Số hóa AI"),
-                sourceLabel = "Số hóa AI • ${sourceFileName ?: "Văn bản dán"}",
-                year = 2025,
-                difficulty = ExamDifficulty.HARD,
-                topicVi = json.optString("topicVi", "Chủ đề cá nhân hóa"),
-                topicEn = json.optString("topicEn", "Custom Academic Topic"),
-                isCustom = true,
-                audioUri = audioUri,
-                audioDisplayName = audioDisplayName,
-                listeningTitle = json.optString("listeningTitle", "Listening Section"),
-                listeningScript = listeningLines,
-                readingTitle = json.optString("readingTitle", json.optString("title", "Academic Reading")),
-                readingParagraphs = paragraphs,
-                writingTask1Prompt = "Summarise the main findings and trends related to ${json.optString("topicEn", "this topic")} in at least 150 words.",
-                writingTask2Prompt = json.optString(
-                    "writingTask2Prompt",
-                    "Discuss the main arguments surrounding ${json.optString("topicEn", "this issue")} and state your own position (at least 250 words)."
-                ),
-                speakingPrompts = listOf(
-                    "Part 1: What interests you most about ${json.optString("topicEn", "this subject")}?",
-                    "Part 2: Describe an experience or article related to ${json.optString("topicEn", "this topic")} that changed your perspective.",
-                    "Part 3: How should policymakers balance innovation and ethics in this domain?"
-                ),
-                questions = questions
-            )
-        } catch (e: TimeoutCancellationException) {
-            Log.e(TAG, "AI Exam Parser timed out", e)
-            throw IllegalStateException("Số hóa đề thi quá 60 giây. Hãy rút gọn văn bản hoặc thử lại.")
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Log.e(TAG, "AI Exam Parser failed", e)
-            throw IllegalStateException(
-                e.localizedMessage?.takeIf { it.isNotBlank() }
-                    ?: "Không thể số hóa đề thi lúc này. Vui lòng kiểm tra file/mạng và thử lại."
-            )
         }
+
+        ExamPaper(
+            id = "custom_${System.currentTimeMillis()}",
+            title = json.optString("title", sourceFileName ?: "Đề IELTS Số hóa AI"),
+            sourceLabel = "Số hóa AI • ${sourceFileName ?: "Văn bản dán"}",
+            year = 2025,
+            difficulty = ExamDifficulty.HARD,
+            topicVi = json.optString("topicVi", "Chủ đề cá nhân hóa"),
+            topicEn = json.optString("topicEn", "Custom Academic Topic"),
+            isCustom = true,
+            audioUri = audioUri,
+            audioDisplayName = audioDisplayName,
+            listeningTitle = json.optString("listeningTitle", "Listening Section"),
+            listeningScript = listeningLines,
+            readingTitle = json.optString("readingTitle", json.optString("title", "Academic Reading")),
+            readingParagraphs = paragraphs,
+            writingTask1Prompt = "Summarise the main findings and trends related to ${json.optString("topicEn", "this topic")} in at least 150 words.",
+            writingTask2Prompt = json.optString(
+                "writingTask2Prompt",
+                "Discuss the main arguments surrounding ${json.optString("topicEn", "this issue")} and state your own position (at least 250 words)."
+            ),
+            speakingPrompts = listOf(
+                "Part 1: What interests you most about ${json.optString("topicEn", "this subject")}?",
+                "Part 2: Describe an experience or article related to ${json.optString("topicEn", "this topic")} that changed your perspective.",
+                "Part 3: How should policymakers balance innovation and ethics in this domain?"
+            ),
+            questions = questions
+        )
     }
 }

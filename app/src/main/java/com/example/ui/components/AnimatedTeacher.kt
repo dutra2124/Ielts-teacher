@@ -57,7 +57,7 @@ fun AnimatedTeacher(
     isSpeaking: Boolean,
     modifier: Modifier = Modifier,
     size: Dp = 112.dp,
-    contentDescriptionText: String = "Trợ giảng AI ApexIELTS",
+    contentDescriptionText: String = "Trợ giảng AI Master Ielts",
     onClick: (() -> Unit)? = null
 ) {
     val transition = rememberInfiniteTransition(label = "ai_teacher")

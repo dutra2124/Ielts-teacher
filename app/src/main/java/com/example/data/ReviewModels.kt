@@ -40,6 +40,13 @@ data class UpgradeDiffComparison(
     val isAiGenerated: Boolean = false
 )
 
+data class DeepQuestionAnalysis(
+    val quickTipVi: String,
+    val commonMistakesVi: String,
+    val misconceptionTrapVi: String,
+    val isAiGenerated: Boolean = false
+)
+
 data class ReviewErrorLogItem(
     val id: String,
     val questionNumber: Int,
@@ -52,7 +59,14 @@ data class ReviewErrorLogItem(
     val grammarNoteVi: String,
     val linkedVocabWordId: String,
     val linkedVocabWordEn: String,
-    val targetPracticeSkill: PracticeSkill
+    val targetPracticeSkill: PracticeSkill,
+    val isCorrect: Boolean = false,
+    val passageExcerptEn: String = "",
+    val deepAnalysis: DeepQuestionAnalysis = DeepQuestionAnalysis(
+        quickTipVi = "Gạch chân từ khóa định vị (tên riêng, số liệu, động từ chính) trong câu hỏi trước khi quét đoạn văn.",
+        commonMistakesVi = "Chọn đáp án vội khi thấy từ khóa trùng khớp mà chưa kiểm tra mệnh đề phủ định hoặc giới hạn từ.",
+        misconceptionTrapVi = distractorTrapVi
+    )
 )
 
 data class ReviewReportBundle(
@@ -150,7 +164,14 @@ object ReviewReportFactory {
                 grammarNoteVi = "Cụm phân từ hiện tại '..., often boosting students' short-term confidence' bổ sung kết quả trực tiếp cho mệnh đề chính.",
                 linkedVocabWordId = "ed_2",
                 linkedVocabWordEn = "pedagogical",
-                targetPracticeSkill = PracticeSkill.READING
+                targetPracticeSkill = PracticeSkill.READING,
+                isCorrect = false,
+                passageExcerptEn = "Frictionless apps streamline revision, often boosting students' short-term confidence while masking shallow retention.",
+                deepAnalysis = DeepQuestionAnalysis(
+                    quickTipVi = "Bước 1: Khoanh tròn động từ mang chiều hướng tăng/giảm ('lower') và chủ ngữ ('Frictionless educational tools'). Bước 2: Định vị cụm 'short-term confidence' trong đoạn A rồi đối chiếu trực tiếp chiều hướng: 'boosting' (tăng) ≠ 'lower' (giảm) → chốt ngay FALSE trong 15 giây.",
+                    commonMistakesVi = "Thí sinh Band 6.0–6.5 hay đọc thấy vế sau mang nghĩa tiêu cực ('masking shallow retention') nên suy diễn chung rằng công cụ đó làm giảm tự tin và chọn TRUE hoặc nhầm sang NOT GIVEN.",
+                    misconceptionTrapVi = "Bẫy đảo chiều kết hợp tương phản kép: Giám khảo cố tình đặt kết quả tích cực ngắn hạn ('boosting confidence') ngay cạnh hệ quả tiêu cực dài hạn ('shallow retention') để thí sinh đọc lướt bị nhiễu cảm tính."
+                )
             ),
             ReviewErrorLogItem(
                 id = "err_sample_2",
@@ -164,7 +185,14 @@ object ReviewReportFactory {
                 grammarNoteVi = "Cấu trúc 'mistaking A for B' (nhầm lẫn nỗ lực trí tuệ là giảng dạy kém) diễn tả nguyên nhân cốt lõi của nghịch lý.",
                 linkedVocabWordId = "ed_1",
                 linkedVocabWordEn = "ubiquitous",
-                targetPracticeSkill = PracticeSkill.READING
+                targetPracticeSkill = PracticeSkill.READING,
+                isCorrect = false,
+                passageExcerptEn = "Engineering students in active-learning cohorts achieved higher exam scores. Yet course surveys revealed they rated lectures as less enjoyable, mistaking cognitive effort for poor instruction.",
+                deepAnalysis = DeepQuestionAnalysis(
+                    quickTipVi = "Đừng chỉ đọc câu đầu đoạn! Khi làm Matching Headings, hãy quét ngay các từ bẻ lái (Yet / However / Surprisingly / In contrast). Ý chính của cả đoạn gần như luôn nằm ngay sau từ bẻ lái đó.",
+                    commonMistakesVi = "Mắc bẫy 'word-matching': Thấy câu đầu có từ 'higher exam scores' liền ghép với Heading nói về thành tích điểm số mà bỏ qua thông điệp nghịch lý xuyên suốt cả đoạn.",
+                    misconceptionTrapVi = "Hiểu nhầm rằng câu đầu tiên (Topic Sentence) luôn chứa đáp án. Trong Reading Passage 2–3 chuẩn Cambridge, câu 1 thường chỉ là bối cảnh nền để làm nổi bật sự trớ trêu ('unexpected irony') ở câu 2–3."
+                )
             ),
             ReviewErrorLogItem(
                 id = "err_sample_3",
@@ -178,7 +206,14 @@ object ReviewReportFactory {
                 grammarNoteVi = "Liên từ điều kiện học thuật 'provided (that) notifications were strictly disabled' = 'miễn là thông báo được tắt hoàn toàn'.",
                 linkedVocabWordId = "ed_3",
                 linkedVocabWordEn = "mitigate",
-                targetPracticeSkill = PracticeSkill.LISTENING
+                targetPracticeSkill = PracticeSkill.LISTENING,
+                isCorrect = false,
+                passageExcerptEn = "Interestingly, stylus-equipped tablets matched paper retention, provided notifications were strictly disabled throughout the lecture.",
+                deepAnalysis = DeepQuestionAnalysis(
+                    quickTipVi = "Trong 30 giây đọc đề trước khi băng chạy, luôn nhìn NGAY từ đứng sau chỗ trống ('were') để dự đoán trước loại từ là Danh từ số nhiều (+s/es). Khi nghe thấy cụm chuyển ý 'provided (that)...' (paraphrase của 'only when'), tập trung tối đa vào âm đuôi /z/.",
+                    commonMistakesVi = "Rớt mất đuôi '-s' số nhiều ('notification' thay vì 'notifications') hoặc viết thừa mạo từ vượt giới hạn ONE WORD ONLY — lỗi kinh điển khiến thí sinh mất 0.5–1.0 Band Listening dù nghe đúng từ.",
+                    misconceptionTrapVi = "Trong băng ghi âm, âm /z/ của 'notifications' nối nhanh sang 'were' nên rất dễ nghe thành số ít. Ngoài ra, câu đề đổi 'disabled' thành 'turned off' và 'provided' thành 'only when' khiến thí sinh chờ cụm 'turned off' sẽ bị trôi qua đáp án."
+                )
             ),
             ReviewErrorLogItem(
                 id = "err_sample_4",
@@ -192,7 +227,35 @@ object ReviewReportFactory {
                 grammarNoteVi = "Động từ 'advocate + V-ing' (advocate teaching...) là cấu trúc cực mạnh để tái sử dụng trong IELTS Writing Task 2.",
                 linkedVocabWordId = "ed_4",
                 linkedVocabWordEn = "foster",
-                targetPracticeSkill = PracticeSkill.READING
+                targetPracticeSkill = PracticeSkill.READING,
+                isCorrect = false,
+                passageExcerptEn = "Consequently, curriculum designers increasingly advocate explicit metacognitive literacy so students recognise productive struggle as genuine learning.",
+                deepAnalysis = DeepQuestionAnalysis(
+                    quickTipVi = "Kiểm tra giới hạn từ (NO MORE THAN TWO WORDS) và xác định cụm danh từ hoàn chỉnh đứng sau động từ 'advocate'. Nếu bỏ tính từ đứng trước mà câu bị đổi/loãng nghĩa ('literacy' chung chung ≠ 'metacognitive literacy'), bắt buộc phải lấy cả tính từ.",
+                    commonMistakesVi = "Thói quen chỉ điền 1 danh từ chính cuối cùng để 'an toàn', hoặc chép luôn cả tính từ thừa thứ 3 ('explicit metacognitive literacy' = 3 từ) dẫn đến vi phạm Word Limit.",
+                    misconceptionTrapVi = "Thí sinh hay hiểu nhầm 'literacy' là đủ nghĩa. Thực tế 'explicit' chỉ mức độ giảng dạy (có thể lược), còn 'metacognitive' là định nghĩa chuyên ngành bắt buộc tạo nên khái niệm 'năng lực siêu nhận thức'."
+                )
+            ),
+            ReviewErrorLogItem(
+                id = "err_sample_5",
+                questionNumber = 1,
+                skill = ExamQuestionSkill.READING,
+                questionTypeVi = "Multiple Choice (MCQ)",
+                promptEn = "What is the writer's main concern regarding rapid AI-assisted summarisation?",
+                userAnswer = "B. It reduces cognitive engagement required for long-term memory.",
+                correctAnswer = "B. It reduces cognitive engagement required for long-term memory.",
+                distractorTrapVi = "Câu này bạn làm ĐÚNG! Phương án A & C là bẫy 'nửa đúng nửa sai' khi phóng đại chi phí phần cứng.",
+                grammarNoteVi = "Mệnh đề quan hệ rút gọn 'required for long-term memory' = 'which is required for long-term memory'.",
+                linkedVocabWordId = "ed_1",
+                linkedVocabWordEn = "ubiquitous",
+                targetPracticeSkill = PracticeSkill.READING,
+                isCorrect = true,
+                passageExcerptEn = "By automating every synthesis step, learners bypass the deep cognitive engagement required to encode concepts into long-term memory.",
+                deepAnalysis = DeepQuestionAnalysis(
+                    quickTipVi = "Với câu hỏi 'main concern / main purpose' trong MCQ, hãy loại trừ trước các phương án chứa từ cực đoan (only, always, completely) hoặc chi tiết chỉ xuất hiện ở 1 cụm nhỏ, rồi so sánh ý cốt lõi của phương án còn lại.",
+                    commonMistakesVi = "Hay chọn nhầm đáp án có nhiều từ giống hệt bài đọc (word-for-word) thay vì đáp án dùng Paraphrase chuẩn ('bypass deep engagement' = 'reduces cognitive engagement').",
+                    misconceptionTrapVi = "Bẫy 'Đúng sự thật ngoài đời nhưng không có trong bài' hoặc bẫy 'Quá hẹp': các đáp án nhiễu thường nêu đúng 1 ví dụ phụ nhưng không phải 'main concern' của tác giả."
+                )
             )
         )
 
@@ -264,16 +327,13 @@ object ReviewReportFactory {
         val overallRaw = (listeningBand + readingBand + writingBand + speakingBand) / 4f
         val overallRounded = (overallRaw * 2f).roundToInt() / 2f
 
-        val missedQuestions = matchedExam?.questions.orEmpty().filter { q ->
-            val includeSkill = when (attempt.mode) {
+        val reviewedQuestions = matchedExam?.questions.orEmpty().filter { q ->
+            when (attempt.mode) {
                 ExamSkillMode.LISTENING -> q.skill == ExamQuestionSkill.LISTENING
                 ExamSkillMode.READING -> q.skill == ExamQuestionSkill.READING
                 ExamSkillMode.FULL_TEST -> true
                 else -> false
             }
-            if (!includeSkill) return@filter false
-            val userAns = attempt.objectiveAnswers[q.id].orEmpty().trim()
-            userAns.isEmpty() || q.acceptableAnswers.none { it.equals(userAns, ignoreCase = true) }
         }
 
         val fallbackWords = listOf(
@@ -284,14 +344,20 @@ object ReviewReportFactory {
             "env_1" to "exacerbate"
         )
 
-        val liveErrors = missedQuestions.mapIndexed { idx, q ->
+        val excerptBase = matchedExam?.readingParagraphs
+            ?.firstOrNull()
+            ?.sentences
+            ?.joinToString(" ")
+            ?.take(280)
+            .orEmpty()
+
+        val liveErrors = reviewedQuestions.mapIndexed { idx, q ->
             val (wordId, wordEn) = fallbackWords[idx % fallbackWords.size]
-            val userAns = attempt.objectiveAnswers[q.id].orEmpty().ifBlank { "(Bỏ trống)" }
-            val trap = when (q.type) {
-                ExamQuestionType.TFNG -> "Bẫy đối lập/suy diễn TFNG: Hãy kiểm tra kỹ trạng từ chỉ mức độ và đối chiếu từng vế với đoạn gốc."
-                ExamQuestionType.MCQ -> "Bẫy Distractor trắc nghiệm: Phương án nhiễu thường lặp lại từ khóa bài đọc nhưng bẻ cong quan hệ nguyên nhân – kết quả."
-                ExamQuestionType.GAP_FILL -> "Bẫy giới hạn từ & số ít/số nhiều: Kiểm tra từ loại đứng trước/sau chỗ trống và số từ quy định."
-            }
+            val rawAns = attempt.objectiveAnswers[q.id].orEmpty().trim()
+            val userAns = rawAns.ifBlank { "(Bỏ trống)" }
+            val isCorrect = rawAns.isNotEmpty() && q.acceptableAnswers.any { it.equals(rawAns, ignoreCase = true) }
+
+            val deep = buildDiagnosticForQuestion(q = q, userAns = userAns, isCorrect = isCorrect)
             ReviewErrorLogItem(
                 id = "live_err_${q.id}",
                 questionNumber = q.number,
@@ -300,13 +366,20 @@ object ReviewReportFactory {
                 promptEn = q.promptEn,
                 userAnswer = userAns,
                 correctAnswer = q.correctAnswer,
-                distractorTrapVi = trap,
+                distractorTrapVi = deep.misconceptionTrapVi,
                 grammarNoteVi = "Đối chiếu cụm Paraphrase của \"${q.correctAnswer}\" trong ngữ cảnh câu gốc để tăng tốc độ quét từ khóa Band 8.5.",
                 linkedVocabWordId = wordId,
                 linkedVocabWordEn = wordEn,
-                targetPracticeSkill = if (q.skill == ExamQuestionSkill.LISTENING) PracticeSkill.LISTENING else PracticeSkill.READING
+                targetPracticeSkill = if (q.skill == ExamQuestionSkill.LISTENING) PracticeSkill.LISTENING else PracticeSkill.READING,
+                isCorrect = isCorrect,
+                passageExcerptEn = if (q.skill == ExamQuestionSkill.LISTENING) {
+                    matchedExam?.listeningScript?.joinToString(" ")?.take(280).orEmpty()
+                } else {
+                    excerptBase
+                },
+                deepAnalysis = deep
             )
-        }
+        }.sortedBy { it.isCorrect } // Show missed questions first, then correct ones for complete review
 
         val tfngQs = matchedExam?.questions?.filter { it.type == ExamQuestionType.TFNG }.orEmpty()
         val mcqQs = matchedExam?.questions?.filter { it.type == ExamQuestionType.MCQ }.orEmpty()
@@ -393,4 +466,52 @@ object ReviewReportFactory {
             errorLog = liveErrors
         )
     }
+
+    private fun buildDiagnosticForQuestion(
+        q: ExamQuestionItem,
+        userAns: String,
+        isCorrect: Boolean
+    ): DeepQuestionAnalysis {
+        val statusNote = if (isCorrect) {
+            "Bạn đã chọn đúng \"${q.correctAnswer}\" — hãy giữ vững kỹ thuật đối chiếu này ở tốc độ thi thật!"
+        } else {
+            "Bạn chọn \"$userAns\" thay vì \"${q.correctAnswer}\"."
+        }
+        return when (q.type) {
+            ExamQuestionType.TFNG -> DeepQuestionAnalysis(
+                quickTipVi = "Bước 1: Khoanh tròn từ khóa định vị (tên riêng, số liệu) và từ hạn định (only, always, solely, majority) trong mệnh đề. Bước 2: So sánh 3 mức — khớp hoàn toàn = TRUE, trái ngược trực tiếp = FALSE, không đề cập yếu tố so sánh/điều kiện = NOT GIVEN.",
+                commonMistakesVi = "$statusNote Thí sinh Band 6.0–6.5 thường nhầm lẫn nghiêm trọng giữa FALSE và NOT GIVEN vì tự suy diễn logic ngoài bài đọc thay vì dựa hoàn toàn vào bằng chứng văn bản.",
+                misconceptionTrapVi = "Bẫy Distractor TFNG: Đoạn văn thường lặp lại y nguyên chủ ngữ trong câu hỏi nhưng lồng thêm từ giảm nhẹ (partially, some, in certain cases) hoặc không hề nêu phép so sánh mà câu hỏi khẳng định."
+            )
+
+            ExamQuestionType.MCQ -> if (q.skill == ExamQuestionSkill.LISTENING) {
+                DeepQuestionAnalysis(
+                    quickTipVi = "Đọc trước stem câu hỏi và gạch chân từ khóa phân biệt giữa 3–4 phương án A/B/C/D trước khi băng chạy. Lắng nghe chặt các từ chuyển hướng (however, actually, on second thought) để chốt đáp án \"${q.correctAnswer}\".",
+                    commonMistakesVi = "$statusNote Lỗi phổ biến Band 6.0–6.5 là chọn ngay phương án đầu tiên nghe thấy giống từ khóa trên giấy (word-matching) mà bỏ qua phần phủ định hoặc sửa ý ngay sau đó.",
+                    misconceptionTrapVi = "Bẫy tự sửa ý (Self-correction Distractor): Người nói thường nhắc đến phương án nhiễu trước như một giả định hoặc kế hoạch cũ, sau đó mới đổi sang đáp án đúng bằng cách diễn đạt đồng nghĩa (Paraphrase)."
+                )
+            } else {
+                DeepQuestionAnalysis(
+                    quickTipVi = "Áp dụng phương pháp loại trừ 2 bước: xác định đoạn văn chứa từ khóa gốc, đọc kỹ câu chủ đề + câu kết đoạn, rồi gạch bỏ phương án quá cực đoan (all, never, completely) hoặc sai phạm vi trước khi chọn \"${q.correctAnswer}\".",
+                    commonMistakesVi = "$statusNote Thí sinh Band 6.0–6.5 hay bị thu hút bởi phương án có chứa đúng từ vựng xuất hiện trong bài đọc dù ý nghĩa tổng thể đã bị bóp méo hoặc đảo ngược nguyên nhân – kết quả.",
+                    misconceptionTrapVi = "Bẫy sao chép từ vựng (Lexical Overlap Trap): Phương án nhiễu mượn nguyên từ khóa bề mặt của bài đọc để tạo cảm giác quen thuộc, trong khi đáp án đúng \"${q.correctAnswer}\" lại được viết lại hoàn toàn bằng từ đồng nghĩa học thuật."
+                )
+            }
+
+            ExamQuestionType.GAP_FILL -> if (q.skill == ExamQuestionSkill.LISTENING) {
+                DeepQuestionAnalysis(
+                    quickTipVi = "Dự đoán trước loại từ (Danh từ số ít/nhiều, Tính từ, Số liệu) dựa vào mạo từ/giới từ đứng ngay trước chỗ trống và kiểm tra giới hạn từ (NO MORE THAN TWO WORDS). Chú ý trọng âm giọng người nói khi đọc tới \"${q.correctAnswer}\".",
+                    commonMistakesVi = "$statusNote Thí sinh Band 6.0–6.5 rất dễ mất điểm oan do thiếu đuôi số nhiều \"-s/-es\", sai chính tả từ học thuật, hoặc viết thừa từ đã có sẵn cạnh chỗ trống.",
+                    misconceptionTrapVi = "Bẫy thông tin nhiễu liên tiếp (Double-Mention Trap): Bài nghe thường đưa ra một con số/từ khóa thử nghiệm trước rồi mới đính chính thông tin chính thức ngay câu kế tiếp — chỉ chốt đáp án sau khi người nói hoàn tất ý."
+                )
+            } else {
+                DeepQuestionAnalysis(
+                    quickTipVi = "Xác định cấu trúc ngữ pháp quanh chỗ trống để biết chính xác cần điền danh từ, động từ hay tính từ, sau đó quét từ khóa định vị quanh câu và chép nguyên dạng từ trong bài đọc cho đáp án \"${q.correctAnswer}\".",
+                    commonMistakesVi = "$statusNote Lỗi hay gặp ở Band 6.0–6.5 là tự ý biến đổi loại từ không khớp bài gốc, viết vượt giới hạn số từ cho phép hoặc bỏ sót tiền tố/hậu tố ngữ pháp.",
+                    misconceptionTrapVi = "Bẫy Paraphrase cấu trúc câu: Câu hỏi thường đổi từ thể chủ động sang bị động hoặc danh từ hóa động từ gốc trong bài đọc, khiến thí sinh tìm sai vị trí từ cần điền nếu chỉ dò theo thứ tự từ."
+                )
+            }
+        }
+    }
 }
+

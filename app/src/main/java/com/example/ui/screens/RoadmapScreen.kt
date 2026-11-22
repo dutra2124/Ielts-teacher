@@ -1,34 +1,26 @@
 package com.example.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -37,28 +29,26 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.AutoAwesome
-import androidx.compose.material.icons.rounded.Book
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Insights
 import androidx.compose.material.icons.rounded.Map
-import androidx.compose.material.icons.rounded.RadioButtonUnchecked
-import androidx.compose.material.icons.rounded.RecordVoiceOver
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.TrendingUp
-import androidx.compose.material.icons.rounded.UploadFile
+import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
@@ -78,13 +68,8 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -96,45 +81,34 @@ import com.example.data.IeltsCurriculum
 import com.example.data.IeltsModule
 import com.example.data.PracticeSkill
 import com.example.data.ProgressAnalyticsEngine
-import com.example.data.RoadmapTier
 import com.example.ui.ApexIeltsUiState
+import com.example.ui.components.AccountAvatarButton
 import com.example.ui.components.AnimatedAudioWaveform
 import com.example.ui.components.AnimatedReminderBell
-import com.example.ui.components.AnimatedStreakFlame
 import com.example.ui.components.AnimatedTeacher
 import com.example.ui.components.DailyStudyTrackerCard
-import com.example.ui.components.SettingsGearButton
-import com.example.ui.components.ThemeQuickToggleButton
+import com.example.ui.components.MasteryStreakIcon
 import com.example.ui.screens.dashboard.ProgressDashboardContent
 import com.example.ui.theme.CardBorderSoft
 import com.example.ui.theme.CardSurfaceTinted
 import com.example.ui.theme.CardWhite
 import com.example.ui.theme.CyanGlow
-import com.example.ui.theme.CyanGlowLight
-import com.example.ui.theme.ElectricIndigo
 import com.example.ui.theme.ElectricIndigoDark
 import com.example.ui.theme.ElectricIndigoLight
-import com.example.ui.theme.EmeraldSuccess
-import com.example.ui.theme.EmeraldSuccessLight
 import com.example.ui.theme.IndigoOnSurface
 import com.example.ui.theme.InkMuted
-import com.example.ui.theme.InkOnHero
-import com.example.ui.theme.InkOnHeroMuted
 import com.example.ui.theme.InkPrimary
 import com.example.ui.theme.InkSecondary
+import com.example.ui.theme.LocalAdaptiveLayoutInfo
 import com.example.ui.theme.LocalApexColors
+import com.example.ui.theme.LocalAppThemePrefs
 import com.example.ui.theme.PlusJakartaSansFontFamily
-import com.example.ui.theme.StreakBg
-import com.example.ui.theme.StreakOrange
 import com.example.ui.theme.SurfaceCanvas
-import com.example.ui.theme.VividViolet
+import com.example.ui.theme.ThemeHeroBrush
+import com.example.ui.theme.ThemeOnPrimary
+import com.example.ui.theme.ThemePrimary
+import com.example.ui.theme.ThemeSecondary
 import java.util.Locale
-
-private val HeroGradient = Brush.linearGradient(
-    colors = listOf(ElectricIndigo, VividViolet, CyanGlow),
-    start = Offset(0f, 0f),
-    end = Offset(1100f, 950f)
-)
 
 @Composable
 fun RoadmapScreen(
@@ -145,15 +119,19 @@ fun RoadmapScreen(
     onCycleTip: () -> Unit,
     onTeacherTap: () -> Unit,
     onOpenNotificationSheet: () -> Unit,
+    onOpenScheduleSettings: () -> Unit = onOpenNotificationSheet,
+    onOpenStreakSheet: () -> Unit = {},
     onOpenThemeSheet: () -> Unit = {},
-    onOpenSettingsSheet: () -> Unit = {},
-    onOpenPersonalLibrary: () -> Unit = {},
-    onOpenBulkImporter: () -> Unit = {},
+    onOpenAccountDrawer: () -> Unit = {},
     onToggleAutoGreetVoice: (Boolean) -> Unit = {},
     onPracticeWeakSkill: (PracticeSkill, String) -> Unit = { _, _ -> },
     onOpenLearnTab: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val layoutInfo = LocalAdaptiveLayoutInfo.current
+    val hPad = layoutInfo.horizontalPadding
+    val hasCustomBg = LocalAppThemePrefs.current.hasCustomVisualBackground
+
     // 0 = Lộ trình 12 Module, 1 = Dashboard Chăm chỉ
     var selectedTab1View by rememberSaveable { mutableIntStateOf(0) }
     val dashboardSnapshot = remember(
@@ -171,19 +149,26 @@ fun RoadmapScreen(
         ProgressAnalyticsEngine.compute(uiState)
     }
 
+    val bestExamPercent = remember(uiState.examHistory) {
+        val bestBand = uiState.examHistory.maxOfOrNull { it.estimatedBand } ?: 6.0
+        ((bestBand / 8.5) * 100.0).toInt().coerceIn(0, 100)
+    }
+
     if (selectedTab1View == 1) {
         BackHandler { selectedTab1View = 0 }
     }
 
-    LazyColumn(
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(minSize = layoutInfo.adaptiveCardMinWidth),
         modifier = modifier
             .fillMaxSize()
-            .background(SurfaceCanvas)
+            .background(if (hasCustomBg) Color.Transparent else SurfaceCanvas)
             .testTag("roadmap_lazy_column"),
-        contentPadding = PaddingValues(bottom = 28.dp)
+        contentPadding = PaddingValues(bottom = 28.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // 1. Vibrant Hero Header + Segmented Switcher + Clickable Diligence Summary Banner
-        item(key = "hero_and_band_card") {
+        // 1. Clean Decluttered Hero Header + Segmented Switcher
+        item(key = "hero_and_band_card", span = { GridItemSpan(maxLineSpan) }) {
             Box(modifier = Modifier.fillMaxWidth()) {
                 HeroTeacherHeader(
                     uiState = uiState,
@@ -192,29 +177,32 @@ fun RoadmapScreen(
                     onSelectTab1View = { selectedTab1View = it },
                     onCycleTip = onCycleTip,
                     onTeacherTap = onTeacherTap,
+                    onOpenStreakSheet = onOpenStreakSheet,
                     onOpenNotificationSheet = onOpenNotificationSheet,
-                    onOpenThemeSheet = onOpenThemeSheet,
-                    onOpenSettingsSheet = onOpenSettingsSheet,
-                    onOpenPersonalLibrary = onOpenPersonalLibrary,
-                    onOpenBulkImporter = onOpenBulkImporter
+                    onOpenAccountDrawer = onOpenAccountDrawer
                 )
             }
         }
 
         if (selectedTab1View == 1) {
-            item(key = "diligence_progress_dashboard") {
+            item(key = "diligence_progress_dashboard", span = { GridItemSpan(maxLineSpan) }) {
                 ProgressDashboardContent(
                     snapshot = dashboardSnapshot,
                     streakDays = uiState.streakDays,
+                    streakStatus = uiState.streakStatus,
                     autoGreetEnabled = uiState.autoGreetDashboardVoice,
                     onToggleAutoGreet = onToggleAutoGreetVoice,
+                    onOpenStreakSheet = onOpenStreakSheet,
                     onPracticeWeakSkill = onPracticeWeakSkill,
                     modifier = Modifier.offset(y = (-16).dp)
                 )
             }
         } else {
-            // 2. Band Progress Card (6.0 -> 8.5 with count-up animation)
-            item(key = "band_progress_card") {
+            // 2. Band Progress Card + Daily Study Habit Tracker
+            item(
+                key = "band_progress_card",
+                span = { GridItemSpan(if (layoutInfo.useMultiColumnGrid) 1 else maxLineSpan) }
+            ) {
                 BandProgressCard(
                     currentBand = uiState.currentBand,
                     completedCount = uiState.completedModuleIds.size,
@@ -222,13 +210,15 @@ fun RoadmapScreen(
                     activeModule = uiState.activeModule,
                     onOpenLearnTab = onOpenLearnTab,
                     modifier = Modifier
-                        .padding(horizontal = 16.dp)
-                        .offset(y = (-24).dp)
+                        .padding(horizontal = hPad)
+                        .offset(y = (-22).dp)
                 )
             }
 
-            // 2b. Daily Study Habit Tracker Card (Circular Ring + Checklist + Streak + 7-Day T2-CN Calendar)
-            item(key = "daily_study_tracker_card") {
+            item(
+                key = "daily_study_tracker_card",
+                span = { GridItemSpan(if (layoutInfo.useMultiColumnGrid) 1 else maxLineSpan) }
+            ) {
                 DailyStudyTrackerCard(
                     completedHabitIds = uiState.completedHabitIds,
                     streakDays = uiState.streakDays,
@@ -236,105 +226,181 @@ fun RoadmapScreen(
                     todayWeekdayId = uiState.todayWeekdayId,
                     notificationPrefs = uiState.notificationPrefs,
                     onToggleHabit = onToggleDailyHabit,
-                    onOpenNotificationSheet = onOpenNotificationSheet,
+                    onOpenNotificationSheet = onOpenScheduleSettings,
+                    streakStatus = uiState.streakStatus,
+                    onOpenStreakSheet = onOpenStreakSheet,
                     dailySelfStudyMinutes = uiState.dailySelfStudyMinutes,
                     modifier = Modifier
-                        .padding(horizontal = 16.dp)
-                        .offset(y = (-10).dp)
-                        .padding(bottom = 8.dp)
+                        .padding(horizontal = hPad)
+                        .offset(y = if (layoutInfo.useMultiColumnGrid) (-22).dp else (-10).dp)
+                        .padding(bottom = 4.dp)
                 )
             }
 
-            // 3. Roadmap Section Heading
-            item(key = "roadmap_heading") {
-                Column(
+            // 3. Animated 3-Tier Journey Progress Rail (Tier 1 6.0 -> Tier 2 7.0 -> Tier 3 8.0-8.5)
+            item(key = "animated_tier_journey_rail", span = { GridItemSpan(maxLineSpan) }) {
+                AnimatedTierJourneyStrip(
+                    completedCount = uiState.completedModuleIds.size,
+                    totalCount = uiState.modules.size,
+                    activeModuleId = uiState.activeModuleId,
+                    modifier = Modifier
+                        .padding(horizontal = hPad)
+                        .padding(top = 4.dp, bottom = 10.dp)
+                )
+            }
+
+            // 4. Prominent Roadmap Section Heading
+            item(key = "roadmap_heading", span = { GridItemSpan(maxLineSpan) }) {
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 20.dp)
-                        .padding(bottom = 12.dp)
+                        .padding(horizontal = hPad + 2.dp)
+                        .padding(bottom = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(RoundedCornerShape(15.dp))
+                            .background(ElectricIndigoLight),
+                        contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.AutoAwesome,
                             contentDescription = null,
-                            tint = ElectricIndigo,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Text(
-                            text = stringResource(R.string.roadmap_section_title),
-                            style = MaterialTheme.typography.titleLarge,
-                            color = InkPrimary
+                            tint = ThemePrimary,
+                            modifier = Modifier.size(28.dp)
                         )
                     }
-                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = stringResource(R.string.roadmap_section_subtitle),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = InkSecondary
+                        text = stringResource(R.string.roadmap_section_title),
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontFamily = PlusJakartaSansFontFamily,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 18.sp
+                        ),
+                        color = InkPrimary
                     )
                 }
             }
 
-            // 4. Vertical Winding 3-Tier / 12-Module Roadmap (live from offline SQLite / Google Sheets sync)
+            // 5. Adaptive 3-Tier / 12-Module Animated Vertical Journey
             IeltsCurriculum.tierOrder.forEach { tier ->
-            val tierModules = uiState.modules.filter { it.tier == tier }
-            val completedInTier = tierModules.count { uiState.completedModuleIds.contains(it.id) }
+                val tierModules = uiState.modules.filter { it.tier == tier }
+                val completedInTier = tierModules.count { uiState.completedModuleIds.contains(it.id) }
 
-            item(key = "tier_header_${tier.tierNumber}") {
-                TierHeaderBanner(
-                    tier = tier,
-                    completedCount = completedInTier,
-                    totalCount = tierModules.size,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                )
-            }
+                item(key = "tier_header_${tier.tierNumber}", span = { GridItemSpan(maxLineSpan) }) {
+                    TierHeaderBanner(
+                        tier = tier,
+                        completedCount = completedInTier,
+                        totalCount = tierModules.size,
+                        modifier = Modifier.padding(horizontal = hPad, vertical = 6.dp)
+                    )
+                }
 
-            tierModules.forEachIndexed { indexInTier, module ->
-                item(key = "module_node_${module.id}") {
-                    val isSelected = uiState.activeModuleId == module.id
-                    val isCompleted = uiState.completedModuleIds.contains(module.id)
-                    val globalIndex = module.id - 1
-                    val nodeAnchor = windingAnchorFor(globalIndex)
-                    val hasNextInTier = indexInTier < tierModules.lastIndex
-                    val nextAnchor = if (hasNextInTier) windingAnchorFor(globalIndex + 1) else nodeAnchor
+                tierModules.forEachIndexed { indexInTier, module ->
+                    item(
+                        key = "module_node_${module.id}",
+                        span = { GridItemSpan(if (layoutInfo.useMultiColumnGrid) 1 else maxLineSpan) }
+                    ) {
+                        val isSelected = uiState.activeModuleId == module.id
+                        val isCompleted = uiState.completedModuleIds.contains(module.id)
+                        val globalIndex = module.id - 1
+                        val nodeAnchor = if (layoutInfo.useMultiColumnGrid) 0.16f else windingAnchorFor(globalIndex)
+                        val hasNextInTier = indexInTier < tierModules.lastIndex
+                        val nextAnchor = if (hasNextInTier) windingAnchorFor(globalIndex + 1) else nodeAnchor
 
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        WindingModuleRow(
-                            module = module,
-                            anchorFraction = nodeAnchor,
-                            isSelected = isSelected,
-                            isCompleted = isCompleted,
-                            onSelect = { onSelectModule(module.id) },
-                            onToggleCompleted = { onToggleModuleCompletion(module.id) },
-                            onOpenLearnTab = onOpenLearnTab,
-                            modifier = Modifier.padding(horizontal = 16.dp)
-                        )
-
-                        if (hasNextInTier) {
-                            val nextCompleted = uiState.completedModuleIds.contains(module.id + 1)
-                            WindingPathConnector(
-                                startFraction = nodeAnchor,
-                                endFraction = nextAnchor,
-                                accentColor = tier.accentPrimary,
-                                secondaryColor = tier.accentSecondary,
-                                isLit = isCompleted || isSelected || nextCompleted,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(34.dp)
-                                    .padding(horizontal = 16.dp)
+                        val metrics = remember(
+                            module.id,
+                            isCompleted,
+                            isSelected,
+                            uiState.allVocabulary,
+                            uiState.learnedVocabIds,
+                            uiState.completedHabitIds,
+                            bestExamPercent
+                        ) {
+                            computeModuleMetrics(
+                                moduleId = module.id,
+                                isCompleted = isCompleted,
+                                isSelected = isSelected,
+                                uiState = uiState,
+                                bestExamPercent = bestExamPercent
                             )
-                        } else {
-                            Spacer(modifier = Modifier.height(14.dp))
+                        }
+
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            WindingModuleRow(
+                                module = module,
+                                metrics = metrics,
+                                anchorFraction = nodeAnchor,
+                                isSelected = isSelected,
+                                isCompleted = isCompleted,
+                                onSelect = { onSelectModule(module.id) },
+                                onToggleCompleted = { onToggleModuleCompletion(module.id) },
+                                onOpenLearnTab = onOpenLearnTab,
+                                modifier = Modifier.padding(horizontal = hPad)
+                            )
+
+                            if (!layoutInfo.useMultiColumnGrid && hasNextInTier) {
+                                val nextCompleted = uiState.completedModuleIds.contains(module.id + 1)
+                                WindingPathConnector(
+                                    startFraction = nodeAnchor,
+                                    endFraction = nextAnchor,
+                                    accentColor = tier.accentPrimary,
+                                    secondaryColor = tier.accentSecondary,
+                                    isLit = isCompleted || isSelected || nextCompleted,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(34.dp)
+                                        .padding(horizontal = hPad)
+                                )
+                            } else {
+                                Spacer(modifier = Modifier.height(12.dp))
+                            }
                         }
                     }
                 }
             }
         }
-        }
     }
+}
+
+private fun computeModuleMetrics(
+    moduleId: Int,
+    isCompleted: Boolean,
+    isSelected: Boolean,
+    uiState: ApexIeltsUiState,
+    bestExamPercent: Int
+): ModuleVisualMetrics {
+    if (isCompleted) {
+        return ModuleVisualMetrics(vocabPercent = 100, drillsPercent = 100, examPercent = 100)
+    }
+    val moduleWords = uiState.allVocabulary.filter { it.moduleId == moduleId }
+    val learnedInModule = moduleWords.count { uiState.learnedVocabIds.contains(it.id) }
+    val vocabPct = if (moduleWords.isNotEmpty()) {
+        (learnedInModule * 100 / moduleWords.size).coerceIn(0, 100)
+    } else {
+        if (isSelected) 25 else 0
+    }
+
+    val habitRatio = (uiState.completedHabitIds.size * 25).coerceAtMost(75)
+    val drillsPct = when {
+        vocabPct >= 70 -> (vocabPct * 0.85f).toInt().coerceIn(20, 95)
+        isSelected -> maxOf(habitRatio, (vocabPct * 0.7f).toInt()).coerceIn(15, 90)
+        else -> (vocabPct / 2).coerceIn(0, 60)
+    }
+
+    val examPct = when {
+        isSelected -> bestExamPercent.coerceAtLeast(20)
+        moduleId < uiState.activeModuleId -> bestExamPercent
+        else -> 0
+    }
+    return ModuleVisualMetrics(
+        vocabPercent = vocabPct,
+        drillsPercent = drillsPct,
+        examPercent = examPct
+    )
 }
 
 private fun windingAnchorFor(index: Int): Float = when (index % 4) {
@@ -352,438 +418,429 @@ private fun HeroTeacherHeader(
     onSelectTab1View: (Int) -> Unit,
     onCycleTip: () -> Unit,
     onTeacherTap: () -> Unit,
+    onOpenStreakSheet: () -> Unit,
     onOpenNotificationSheet: () -> Unit,
-    onOpenThemeSheet: () -> Unit,
-    onOpenSettingsSheet: () -> Unit,
-    onOpenPersonalLibrary: () -> Unit,
-    onOpenBulkImporter: () -> Unit
+    onOpenAccountDrawer: () -> Unit
 ) {
+    val apexColors = LocalApexColors.current
+    val heroInk = apexColors.heroInk
+    val heroInkMuted = heroInk.copy(alpha = 0.80f)
+    val primary = ThemePrimary
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp))
-            .background(HeroGradient)
+            .clip(RoundedCornerShape(bottomStart = 30.dp, bottomEnd = 30.dp))
+            .background(ThemeHeroBrush)
             .drawBehind {
-                // Subtle glowing ambient orbs for depth without clutter
                 drawCircle(
                     brush = Brush.radialGradient(
-                        colors = listOf(CyanGlow.copy(alpha = 0.34f), Color.Transparent),
+                        colors = listOf(CyanGlow.copy(alpha = 0.28f), Color.Transparent),
                         center = Offset(size.width * 0.90f, size.height * 0.14f),
-                        radius = size.width * 0.45f
+                        radius = size.width * 0.44f
                     ),
-                    radius = size.width * 0.45f,
+                    radius = size.width * 0.44f,
                     center = Offset(size.width * 0.90f, size.height * 0.14f)
                 )
                 drawCircle(
                     brush = Brush.radialGradient(
-                        colors = listOf(Color.White.copy(alpha = 0.14f), Color.Transparent),
-                        center = Offset(size.width * 0.10f, size.height * 0.72f),
-                        radius = size.width * 0.38f
+                        colors = listOf(heroInk.copy(alpha = 0.12f), Color.Transparent),
+                        center = Offset(size.width * 0.10f, size.height * 0.76f),
+                        radius = size.width * 0.36f
                     ),
-                    radius = size.width * 0.38f,
-                    center = Offset(size.width * 0.10f, size.height * 0.72f)
+                    radius = size.width * 0.36f,
+                    center = Offset(size.width * 0.10f, size.height * 0.76f)
                 )
             }
             .statusBarsPadding()
-            .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 44.dp)
+            .displayCutoutPadding()
+            .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 38.dp)
     ) {
-        // Top Brand + Streak + Reminder Row
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = Color.White.copy(alpha = 0.18f),
-                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.28f))
+        // Decluttered Top Bar: Brand + Streak + Reminder Bell + Account Avatar
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            val isCompactWidth = maxWidth < 360.dp
+
+            val brandRow: @Composable (Modifier) -> Unit = { rowMod ->
+                Row(
+                    modifier = rowMod,
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    Surface(
+                        shape = RoundedCornerShape(15.dp),
+                        color = heroInk.copy(alpha = 0.22f),
+                        border = BorderStroke(1.2.dp, heroInk.copy(alpha = 0.36f)),
+                        shadowElevation = 3.dp
+                    ) {
+                        Box(
+                            modifier = Modifier.size(46.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.TrendingUp,
+                                contentDescription = null,
+                                tint = heroInk,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+                    }
+                    Column(modifier = Modifier.weight(1f, fill = false)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = "Master Ielts",
+                                style = MaterialTheme.typography.titleLarge.copy(
+                                    fontFamily = PlusJakartaSansFontFamily,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = if (isCompactWidth) 18.sp else 20.sp
+                                ),
+                                color = heroInk,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = heroInk.copy(alpha = 0.20f),
+                                border = BorderStroke(1.dp, heroInk.copy(alpha = 0.35f)),
+                                modifier = Modifier.wrapContentWidth()
+                            ) {
+                                Text(
+                                    text = "8.5",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold),
+                                    color = heroInk,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                        Text(
+                            text = "Lộ trình 6.0 → 8.5 • AI Mentor",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = heroInkMuted,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+
+            val actionControls: @Composable () -> Unit = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    // Prominent Evolving Mastery Streak Pill (32dp Tree/Flame icon — tap to open Streak Progress Sheet)
+                    Surface(
+                        shape = RoundedCornerShape(50),
+                        color = heroInk.copy(alpha = 0.20f),
+                        border = BorderStroke(
+                            width = 1.2.dp,
+                            color = if (uiState.streakStatus.graceWarningVi != null) {
+                                Color(0xFFFBBF24)
+                            } else {
+                                heroInk.copy(alpha = 0.38f)
+                            }
+                        ),
+                        shadowElevation = 2.dp,
+                        modifier = Modifier
+                            .wrapContentWidth()
+                            .clip(RoundedCornerShape(50))
+                            .clickable(onClick = onOpenStreakSheet)
+                            .testTag("streak_badge")
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp),
+                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
+                        ) {
+                            MasteryStreakIcon(
+                                streakDays = uiState.streakStatus.currentStreak,
+                                style = uiState.streakStatus.visualStyle,
+                                size = 32.dp,
+                                contentDescriptionText = "Chuỗi học liên tiếp • Nhấn để xem tiến trình"
+                            )
+                            Text(
+                                text = stringResource(R.string.streak_days_label, uiState.streakStatus.currentStreak),
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.ExtraBold),
+                                color = heroInk,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
+                    }
+
+                    // Prominent High-Contrast Notification Center Bell Button (26dp Bell + Unread Count Badge)
+                    val unreadCount = uiState.notificationUnreadCount
                     Box(
-                        modifier = Modifier.size(38.dp),
+                        modifier = Modifier
+                            .minimumInteractiveComponentSize()
+                            .size(46.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Rounded.TrendingUp,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-                }
-                Column {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Text(
-                            text = "ApexIELTS",
-                            style = MaterialTheme.typography.titleLarge.copy(
-                                fontFamily = PlusJakartaSansFontFamily,
-                                fontWeight = FontWeight.ExtraBold
-                            ),
-                            color = InkOnHero
-                        )
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = CyanGlow.copy(alpha = 0.28f),
-                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.35f))
-                        ) {
-                            Text(
-                                text = "8.5",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = Color.White,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
-                    }
-                    Text(
-                        text = "Lộ trình 6.0 → 8.5 cùng AI Mentor",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = InkOnHeroMuted
-                    )
-                }
-            }
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(5.dp)
-            ) {
-                // Streak Pill with flickering AnimatedStreakFlame
-                Surface(
-                    shape = RoundedCornerShape(50),
-                    color = Color.White.copy(alpha = 0.18f),
-                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.28f)),
-                    modifier = Modifier.testTag("streak_badge")
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(3.dp),
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
-                    ) {
-                        AnimatedStreakFlame(
-                            size = 18.dp,
-                            contentDescriptionText = "Chuỗi học liên tiếp"
-                        )
-                        Text(
-                            text = stringResource(R.string.streak_days_label, uiState.streakDays),
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                            color = Color.White
-                        )
-                    }
-                }
-
-                // Global Theme Manager Button (Light / Late-Night Study / CD-IELTS Dark)
-                ThemeQuickToggleButton(
-                    mode = uiState.themePrefs.mode,
-                    onClick = onOpenThemeSheet
-                )
-
-                // Settings & Cloud Database Sync Gear Icon Button (with Online/Offline dot)
-                SettingsGearButton(
-                    isOnline = uiState.isOnline,
-                    onClick = onOpenSettingsSheet
-                )
-
-                // Reminder Bell Button -> opens Notification Settings Bottom Sheet
-                Box(
-                    modifier = Modifier
-                        .minimumInteractiveComponentSize()
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.18f))
-                        .border(1.dp, Color.White.copy(alpha = 0.28f), CircleShape)
-                        .clickable(onClick = onOpenNotificationSheet)
-                        .testTag("reminder_bell_button"),
-                    contentAlignment = Alignment.Center
-                ) {
-                    AnimatedReminderBell(
-                        size = 23.dp,
-                        tint = Color.White,
-                        isActive = uiState.notificationPrefs.masterEnabled,
-                        contentDescriptionText = stringResource(R.string.reminder_cd)
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        // Prominent Quick-Access Bar in Top Header: "Tự học & Tài liệu" + "Nhập CSV/JSON"
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Surface(
-                shape = RoundedCornerShape(14.dp),
-                color = Color.White.copy(alpha = 0.22f),
-                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.36f)),
-                modifier = Modifier
-                    .weight(1.35f)
-                    .clip(RoundedCornerShape(14.dp))
-                    .clickable(onClick = onOpenPersonalLibrary)
-                    .testTag("header_personal_library_btn")
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Book,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = stringResource(R.string.library_quick_access_btn),
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                        color = Color.White,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    if (uiState.personalMaterials.isNotEmpty()) {
-                        Spacer(modifier = Modifier.width(5.dp))
                         Surface(
                             shape = CircleShape,
-                            color = Color.White.copy(alpha = 0.26f)
+                            color = heroInk.copy(alpha = 0.24f),
+                            border = BorderStroke(1.5.dp, heroInk.copy(alpha = 0.45f)),
+                            shadowElevation = 4.dp,
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .clickable(onClick = onOpenNotificationSheet)
+                                .testTag("reminder_bell_button")
                         ) {
-                            Text(
-                                text = "${uiState.personalMaterials.size}",
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold),
-                                color = Color.White,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
-                            )
+                            Box(contentAlignment = Alignment.Center) {
+                                AnimatedReminderBell(
+                                    size = 26.dp,
+                                    tint = heroInk,
+                                    isActive = unreadCount > 0 || uiState.notificationPrefs.masterEnabled,
+                                    contentDescriptionText = stringResource(R.string.reminder_cd)
+                                )
+                            }
+                        }
+
+                        if (unreadCount > 0) {
+                            Surface(
+                                shape = CircleShape,
+                                color = Color(0xFFE11D48),
+                                border = BorderStroke(1.5.dp, Color.White),
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .wrapContentWidth()
+                                    .testTag("notification_unread_badge")
+                            ) {
+                                Text(
+                                    text = if (unreadCount > 9) "9+" else "$unreadCount",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.ExtraBold,
+                                        fontSize = 9.5.sp
+                                    ),
+                                    color = Color.White,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                                )
+                            }
                         }
                     }
+
+                    // Top-Corner Circular Account Avatar -> Sidebar Drawer (includes Theme Settings)
+                    AccountAvatarButton(
+                        userProfile = uiState.userProfile,
+                        onClick = onOpenAccountDrawer
+                    )
                 }
             }
 
+            if (isCompactWidth) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    brandRow(Modifier.fillMaxWidth())
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        actionControls()
+                    }
+                }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    brandRow(Modifier.weight(1f))
+                    actionControls()
+                }
+            }
+        }
+
+        // Subtle 3-Day Inactivity Grace Window Warning Banner on Hero Header
+        val heroGraceWarning = uiState.streakStatus.graceWarningVi
+        if (heroGraceWarning != null) {
+            Spacer(modifier = Modifier.height(8.dp))
             Surface(
                 shape = RoundedCornerShape(14.dp),
-                color = Color.White.copy(alpha = 0.16f),
-                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.28f)),
+                color = Color(0xFFF59E0B).copy(alpha = 0.24f),
+                border = BorderStroke(1.dp, Color(0xFFFDE68A).copy(alpha = 0.65f)),
                 modifier = Modifier
-                    .weight(0.95f)
+                    .fillMaxWidth()
                     .clip(RoundedCornerShape(14.dp))
-                    .clickable(onClick = onOpenBulkImporter)
-                    .testTag("header_bulk_importer_btn")
+                    .clickable(onClick = onOpenStreakSheet)
+                    .testTag("hero_streak_grace_warning")
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 7.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Rounded.UploadFile,
-                        contentDescription = null,
-                        tint = Color.White,
+                        imageVector = Icons.Rounded.WarningAmber,
+                        contentDescription = "Cảnh báo giữ chuỗi học",
+                        tint = Color(0xFFFEF08A),
                         modifier = Modifier.size(16.dp)
                     )
-                    Spacer(modifier = Modifier.width(5.dp))
                     Text(
-                        text = "Nhập CSV/JSON",
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                        color = Color.White,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        text = heroGraceWarning,
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = heroInk,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
                     )
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
-        // Clean Segmented Switcher at top of Tab 1: "Lộ trình 12 Module" | "Dashboard Chăm chỉ"
+        // Clean 2-Segment Switcher: "Lộ trình 12 Module" | "Dashboard Chăm chỉ (X%)"
         Surface(
             shape = RoundedCornerShape(16.dp),
-            color = Color.White.copy(alpha = 0.16f),
-            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.28f)),
+            color = heroInk.copy(alpha = 0.15f),
+            border = BorderStroke(1.dp, heroInk.copy(alpha = 0.28f)),
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag("tab1_segmented_switcher")
         ) {
-            Row(
-                modifier = Modifier.padding(4.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                val roadmapSelected = selectedTab1View == 0
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = if (roadmapSelected) Color.White else Color.Transparent,
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                val halfMinWidth = ((maxWidth - 12.dp) / 2f).coerceAtLeast(136.dp)
+                Row(
                     modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable { onSelectTab1View(0) }
-                        .testTag("tab1_segment_roadmap")
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 9.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Map,
-                            contentDescription = null,
-                            tint = if (roadmapSelected) ElectricIndigo else Color.White,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(5.dp))
-                        Text(
-                            text = stringResource(R.string.tab1_switch_roadmap),
-                            style = MaterialTheme.typography.labelMedium.copy(
-                                fontWeight = if (roadmapSelected) FontWeight.ExtraBold else FontWeight.SemiBold
-                            ),
-                            color = if (roadmapSelected) ElectricIndigo else Color.White,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
+                    val roadmapSelected = selectedTab1View == 0
+                    val activePillBg = if (apexColors.isHighContrast) Color.Black else Color.White
+                    val activePillFg = if (apexColors.isHighContrast) primary else primary
 
-                val dashboardSelected = selectedTab1View == 1
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = if (dashboardSelected) Color.White else Color.Transparent,
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable { onSelectTab1View(1) }
-                        .testTag("tab1_segment_dashboard")
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 9.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (roadmapSelected) activePillBg else Color.Transparent,
+                        border = if (roadmapSelected && apexColors.isHighContrast) {
+                            BorderStroke(1.5.dp, primary)
+                        } else null,
+                        modifier = Modifier
+                            .widthIn(min = halfMinWidth)
+                            .wrapContentWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { onSelectTab1View(0) }
+                            .testTag("tab1_segment_roadmap")
                     ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Insights,
-                            contentDescription = null,
-                            tint = if (dashboardSelected) ElectricIndigo else Color.White,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(5.dp))
-                        Text(
-                            text = stringResource(R.string.tab1_switch_dashboard),
-                            style = MaterialTheme.typography.labelMedium.copy(
-                                fontWeight = if (dashboardSelected) FontWeight.ExtraBold else FontWeight.SemiBold
-                            ),
-                            color = if (dashboardSelected) ElectricIndigo else Color.White,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Map,
+                                contentDescription = null,
+                                tint = if (roadmapSelected) activePillFg else heroInk,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Text(
+                                text = stringResource(R.string.tab1_switch_roadmap),
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = if (roadmapSelected) FontWeight.ExtraBold else FontWeight.SemiBold
+                                ),
+                                color = if (roadmapSelected) activePillFg else heroInk,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
+                    }
+
+                    val dashboardSelected = selectedTab1View == 1
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (dashboardSelected) activePillBg else Color.Transparent,
+                        border = if (dashboardSelected && apexColors.isHighContrast) {
+                            BorderStroke(1.5.dp, primary)
+                        } else null,
+                        modifier = Modifier
+                            .widthIn(min = halfMinWidth)
+                            .wrapContentWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { onSelectTab1View(1) }
+                            .testTag("tab1_segment_dashboard")
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Insights,
+                                contentDescription = null,
+                                tint = if (dashboardSelected) activePillFg else heroInk,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Text(
+                                text = "${stringResource(R.string.tab1_switch_dashboard)} ($diligenceScore%)",
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = if (dashboardSelected) FontWeight.ExtraBold else FontWeight.SemiBold
+                                ),
+                                color = if (dashboardSelected) activePillFg else heroInk,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
                     }
                 }
             }
         }
 
+        // Compact, airy AI Teacher + Band 8.5 Upgrade Tip strip
         if (selectedTab1View == 0) {
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // 1-Tap Clickable Diligence Summary Banner on Main Header -> opens Dashboard Chăm chỉ
-            Surface(
-                shape = RoundedCornerShape(14.dp),
-                color = Color.White.copy(alpha = 0.20f),
-                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.34f)),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
-                    .clickable { onSelectTab1View(1) }
-                    .testTag("header_diligence_summary_banner")
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = Color.White.copy(alpha = 0.24f)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.RecordVoiceOver,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier
-                                    .padding(6.dp)
-                                    .size(16.dp)
-                            )
-                        }
-                        Column {
-                            Text(
-                                text = "Chỉ số chăm chỉ: $diligenceScore% • Chuỗi ${uiState.streakDays} ngày",
-                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.ExtraBold),
-                                color = Color.White,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                text = "Chạm để mở Dashboard & Nghe cô giáo động viên",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = InkOnHeroMuted,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
-                        contentDescription = "Mở Dashboard Chăm chỉ",
-                        tint = Color.White,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-            }
-
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Animated AI Teacher + Vietnamese Speech Bubble ("Mẹo Band 8.5 hôm nay")
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.Top,
+                verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(top = 6.dp)
-            ) {
-                AnimatedTeacher(
-                    mood = uiState.teacherMood,
-                    isSpeaking = uiState.isTeacherSpeaking,
-                    size = 112.dp,
-                    contentDescriptionText = stringResource(R.string.teacher_cd),
-                    onClick = onTeacherTap
-                )
-                Surface(
-                    shape = RoundedCornerShape(50),
-                    color = Color.White.copy(alpha = 0.20f)
-                ) {
-                    Text(
-                        text = uiState.teacherMood.labelVi,
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp),
-                        color = Color.White,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    AnimatedTeacher(
+                        mood = uiState.teacherMood,
+                        isSpeaking = uiState.isTeacherSpeaking,
+                        size = 92.dp,
+                        contentDescriptionText = stringResource(R.string.teacher_cd),
+                        onClick = onTeacherTap
                     )
+                    Surface(
+                        shape = RoundedCornerShape(50),
+                        color = heroInk.copy(alpha = 0.18f)
+                    ) {
+                        Text(
+                            text = uiState.teacherMood.labelVi,
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp),
+                            color = heroInk,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                        )
+                    }
                 }
-            }
 
-            DailyTipSpeechBubble(
-                tip = uiState.activeDailyTip,
-                moduleNumber = uiState.activeModule.id,
-                isSpeaking = uiState.isTeacherSpeaking,
-                onCycleTip = onCycleTip,
-                modifier = Modifier.weight(1f)
-            )
+                DailyTipSpeechBubble(
+                    tip = uiState.activeDailyTip,
+                    moduleNumber = uiState.activeModule.id,
+                    isSpeaking = uiState.isTeacherSpeaking,
+                    onCycleTip = onCycleTip,
+                    modifier = Modifier.weight(1f)
+                )
             }
         }
     }
@@ -797,32 +854,32 @@ private fun DailyTipSpeechBubble(
     onCycleTip: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val primary = ThemePrimary
     Surface(
         modifier = modifier
             .shadow(
-                elevation = 10.dp,
+                elevation = 8.dp,
                 shape = RoundedCornerShape(
                     topStart = 8.dp,
-                    topEnd = 22.dp,
-                    bottomEnd = 22.dp,
-                    bottomStart = 22.dp
+                    topEnd = 20.dp,
+                    bottomEnd = 20.dp,
+                    bottomStart = 20.dp
                 ),
-                ambientColor = ElectricIndigoDark.copy(alpha = 0.25f),
-                spotColor = ElectricIndigoDark.copy(alpha = 0.28f)
+                ambientColor = ElectricIndigoDark.copy(alpha = 0.20f)
             ),
         shape = RoundedCornerShape(
             topStart = 8.dp,
-            topEnd = 22.dp,
-            bottomEnd = 22.dp,
-            bottomStart = 22.dp
+            topEnd = 20.dp,
+            bottomEnd = 20.dp,
+            bottomStart = 20.dp
         ),
-        color = CardWhite
+        color = CardWhite,
+        border = BorderStroke(1.dp, CardBorderSoft)
     ) {
         Column(
-            modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp)
         ) {
-            // Speech bubble header row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -830,20 +887,20 @@ private fun DailyTipSpeechBubble(
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
                     modifier = Modifier.weight(1f)
                 ) {
                     AnimatedAudioWaveform(
                         isActive = isSpeaking,
-                        width = 24.dp,
-                        height = 14.dp,
-                        primaryColor = ElectricIndigo,
+                        width = 20.dp,
+                        height = 13.dp,
+                        primaryColor = primary,
                         secondaryColor = CyanGlow
                     )
                     Text(
-                        text = stringResource(R.string.daily_tip_title),
-                        style = MaterialTheme.typography.titleSmall,
-                        color = IndigoOnSurface,
+                        text = "Mẹo #${String.format(Locale.US, "%02d", moduleNumber)}",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.ExtraBold),
+                        color = primary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -866,11 +923,11 @@ private fun DailyTipSpeechBubble(
                             imageVector = Icons.Rounded.Refresh,
                             contentDescription = null,
                             tint = IndigoOnSurface,
-                            modifier = Modifier.size(13.dp)
+                            modifier = Modifier.size(12.dp)
                         )
                         Text(
                             text = stringResource(R.string.next_tip_button),
-                            style = MaterialTheme.typography.labelSmall,
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                             color = IndigoOnSurface
                         )
                     }
@@ -884,46 +941,37 @@ private fun DailyTipSpeechBubble(
                 },
                 label = "daily_tip_content"
             ) { currentTip ->
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        text = "Chủ đề #${String.format(Locale.US, "%02d", moduleNumber)} • ${currentTip.categoryVi}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = IndigoOnSurface
-                    )
-                    Text(
-                        text = currentTip.tipVi,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = InkPrimary
-                    )
-                    // Bilingual Band 6.0 -> Band 8.5 Upgrade Box
-                    Surface(
-                        shape = RoundedCornerShape(14.dp),
-                        color = CardSurfaceTinted,
-                        border = BorderStroke(1.dp, IndigoOnSurface.copy(alpha = 0.22f))
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = CardSurfaceTinted,
+                    border = BorderStroke(1.dp, primary.copy(alpha = 0.22f))
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 10.dp, vertical = 7.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 10.dp, vertical = 8.dp),
-                            verticalArrangement = Arrangement.spacedBy(3.dp)
-                        ) {
-                            Text(
-                                text = "6.0: \"${currentTip.upgradeFromEn}\"",
-                                style = MaterialTheme.typography.bodySmall.copy(
-                                    fontSize = 11.sp,
-                                    textDecoration = TextDecoration.LineThrough
-                                ),
-                                color = InkMuted
-                            )
-                            Text(
-                                text = "8.5: \"${currentTip.academicPhraseEn}\"",
-                                style = MaterialTheme.typography.labelMedium.copy(
-                                    fontFamily = PlusJakartaSansFontFamily,
-                                    fontWeight = FontWeight.Bold
-                                ),
-                                color = IndigoOnSurface
-                            )
-                        }
+                        Text(
+                            text = "6.0: \"${currentTip.upgradeFromEn}\"",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontSize = 11.sp,
+                                textDecoration = TextDecoration.LineThrough
+                            ),
+                            color = InkMuted,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = "8.5: \"${currentTip.academicPhraseEn}\"",
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontFamily = PlusJakartaSansFontFamily,
+                                fontWeight = FontWeight.Bold
+                            ),
+                            color = primary,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                 }
             }
@@ -940,11 +988,14 @@ private fun BandProgressCard(
     onOpenLearnTab: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Trigger smooth count-up animation on initial composition and whenever currentBand changes
+    val apexColors = LocalApexColors.current
+    val highContrast = apexColors.isHighContrast
+    val primary = ThemePrimary
+    val onPrimary = ThemeOnPrimary
+    val secondary = ThemeSecondary
+
     var hasEntered by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        hasEntered = true
-    }
+    LaunchedEffect(Unit) { hasEntered = true }
 
     val animatedBand by animateFloatAsState(
         targetValue = if (hasEntered) currentBand else 5.0f,
@@ -962,30 +1013,29 @@ private fun BandProgressCard(
         modifier = modifier
             .fillMaxWidth()
             .shadow(
-                elevation = 14.dp,
+                elevation = 12.dp,
                 shape = RoundedCornerShape(24.dp),
-                ambientColor = ElectricIndigo.copy(alpha = 0.12f),
-                spotColor = ElectricIndigo.copy(alpha = 0.18f)
+                ambientColor = primary.copy(alpha = 0.12f),
+                spotColor = primary.copy(alpha = 0.18f)
             )
             .testTag("band_progress_card"),
         shape = RoundedCornerShape(24.dp),
         color = CardWhite,
-        border = BorderStroke(1.dp, CardBorderSoft)
+        border = BorderStroke(if (highContrast) 1.5.dp else 1.dp, CardBorderSoft)
     ) {
         Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Top Row: Title + Animated Band Score (6.0 -> 8.5)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(
                         text = stringResource(R.string.band_progress_title),
-                        style = MaterialTheme.typography.titleSmall,
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                         color = InkSecondary
                     )
                     Text(
@@ -1011,7 +1061,7 @@ private fun BandProgressCard(
                                 fontFamily = PlusJakartaSansFontFamily,
                                 fontWeight = FontWeight.ExtraBold
                             ),
-                            color = ElectricIndigo,
+                            color = primary,
                             modifier = Modifier.testTag("animated_band_score")
                         )
                     }
@@ -1027,7 +1077,7 @@ private fun BandProgressCard(
                         Text(
                             text = stringResource(R.string.target_band_label),
                             style = MaterialTheme.typography.labelSmall,
-                            color = VividViolet
+                            color = secondary
                         )
                         Text(
                             text = "8.5",
@@ -1035,30 +1085,28 @@ private fun BandProgressCard(
                                 fontFamily = PlusJakartaSansFontFamily,
                                 fontWeight = FontWeight.ExtraBold
                             ),
-                            color = VividViolet
+                            color = secondary
                         )
                     }
                 }
             }
 
-            // Gradient Progress Track with 6.0 / 7.0 / 8.0 / 8.5 Milestone Ticks
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            // Animated Band Progress Track
+            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(12.dp)
+                        .height(11.dp)
                         .clip(RoundedCornerShape(50))
                         .background(SurfaceCanvas)
                 ) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth(animatedProgress)
-                            .height(12.dp)
+                            .height(11.dp)
                             .clip(RoundedCornerShape(50))
                             .background(
-                                Brush.horizontalGradient(
-                                    listOf(ElectricIndigo, VividViolet, CyanGlow)
-                                )
+                                Brush.horizontalGradient(listOf(primary, secondary, CyanGlow))
                             )
                     )
                 }
@@ -1068,18 +1116,19 @@ private fun BandProgressCard(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     listOf("6.0", "7.0", "8.0", "8.5").forEach { milestone ->
-                        val milestoneVal = milestone.toFloat()
-                        val reached = currentBand >= milestoneVal
+                        val reached = currentBand >= milestone.toFloat()
                         Text(
                             text = milestone,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (reached) ElectricIndigo else InkMuted
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = if (reached) FontWeight.Bold else FontWeight.Medium
+                            ),
+                            color = if (reached) primary else InkMuted
                         )
                     }
                 }
             }
 
-            // Active Module Filter Strip + Jump to Learn CTA
+            // Active Module Strip + High-Visibility Primary CTA Button
             Surface(
                 shape = RoundedCornerShape(16.dp),
                 color = SurfaceCanvas,
@@ -1088,7 +1137,7 @@ private fun BandProgressCard(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                        .padding(horizontal = 12.dp, vertical = 9.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
@@ -1115,16 +1164,18 @@ private fun BandProgressCard(
                         shape = RoundedCornerShape(14.dp),
                         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = ElectricIndigo,
-                            contentColor = Color.White
+                            containerColor = primary,
+                            contentColor = onPrimary
                         ),
+                        border = if (highContrast) BorderStroke(1.5.dp, onPrimary.copy(alpha = 0.5f)) else null,
+                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 3.dp),
                         modifier = Modifier
                             .minimumInteractiveComponentSize()
                             .testTag("start_learning_button")
                     ) {
                         Text(
                             text = stringResource(R.string.start_learning_cta),
-                            style = MaterialTheme.typography.labelMedium
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.ExtraBold)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Icon(
@@ -1135,485 +1186,6 @@ private fun BandProgressCard(
                     }
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun TierHeaderBanner(
-    tier: RoadmapTier,
-    completedCount: Int,
-    totalCount: Int,
-    modifier: Modifier = Modifier
-) {
-    val isDark = LocalApexColors.current.isDark
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        color = if (isDark) CardSurfaceTinted else tier.containerColor.copy(alpha = 0.62f),
-        border = BorderStroke(1.dp, if (isDark) CardBorderSoft else tier.accentPrimary.copy(alpha = 0.22f))
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.weight(1f)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(
-                            Brush.linearGradient(listOf(tier.accentPrimary, tier.accentSecondary))
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "T${tier.tierNumber}",
-                        style = MaterialTheme.typography.labelLarge.copy(
-                            fontFamily = PlusJakartaSansFontFamily,
-                            fontWeight = FontWeight.ExtraBold
-                        ),
-                        color = Color.White
-                    )
-                }
-                Column {
-                    Text(
-                        text = "Tier ${tier.tierNumber} • ${tier.titleEn}",
-                        style = MaterialTheme.typography.titleMedium.copy(fontSize = 14.sp),
-                        color = InkPrimary
-                    )
-                    Text(
-                        text = tier.subtitleVi,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = InkSecondary
-                    )
-                }
-            }
-
-            Column(horizontalAlignment = Alignment.End) {
-                Surface(
-                    shape = RoundedCornerShape(50),
-                    color = CardWhite
-                ) {
-                    Text(
-                        text = tier.bandRange,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (isDark) IndigoOnSurface else tier.accentPrimary,
-                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.height(3.dp))
-                Text(
-                    text = "$completedCount/$totalCount chủ đề",
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                    color = InkMuted
-                )
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun WindingModuleRow(
-    module: IeltsModule,
-    anchorFraction: Float,
-    isSelected: Boolean,
-    isCompleted: Boolean,
-    onSelect: () -> Unit,
-    onToggleCompleted: () -> Unit,
-    onOpenLearnTab: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val nodeOnLeft = anchorFraction < 0.5f
-
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        if (nodeOnLeft) {
-            WindingNodeEmblem(
-                module = module,
-                isSelected = isSelected,
-                isCompleted = isCompleted,
-                onClick = onSelect
-            )
-            ModuleRoadmapCard(
-                module = module,
-                isSelected = isSelected,
-                isCompleted = isCompleted,
-                onSelect = onSelect,
-                onToggleCompleted = onToggleCompleted,
-                onOpenLearnTab = onOpenLearnTab,
-                modifier = Modifier.weight(1f)
-            )
-        } else {
-            ModuleRoadmapCard(
-                module = module,
-                isSelected = isSelected,
-                isCompleted = isCompleted,
-                onSelect = onSelect,
-                onToggleCompleted = onToggleCompleted,
-                onOpenLearnTab = onOpenLearnTab,
-                modifier = Modifier.weight(1f)
-            )
-            WindingNodeEmblem(
-                module = module,
-                isSelected = isSelected,
-                isCompleted = isCompleted,
-                onClick = onSelect
-            )
-        }
-    }
-}
-
-@Composable
-private fun WindingNodeEmblem(
-    module: IeltsModule,
-    isSelected: Boolean,
-    isCompleted: Boolean,
-    onClick: () -> Unit
-) {
-    val pulseTransition = rememberInfiniteTransition(label = "node_pulse_${module.id}")
-    val pulseScale by pulseTransition.animateFloat(
-        initialValue = 1.0f,
-        targetValue = 1.18f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1200, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulse_ring"
-    )
-
-    val nodeGradient = when {
-        isCompleted -> Brush.linearGradient(listOf(EmeraldSuccess, CyanGlow))
-        isSelected -> Brush.linearGradient(listOf(module.tier.accentPrimary, module.tier.accentSecondary))
-        else -> Brush.linearGradient(listOf(CardWhite, SurfaceCanvas))
-    }
-
-    Box(
-        modifier = Modifier
-            .size(66.dp)
-            .clickable(onClick = onClick)
-            .testTag("roadmap_node_${module.id}"),
-        contentAlignment = Alignment.Center
-    ) {
-        if (isSelected) {
-            Box(
-                modifier = Modifier
-                    .size((58f * pulseScale).dp)
-                    .clip(CircleShape)
-                    .background(module.tier.accentPrimary.copy(alpha = 0.16f))
-            )
-        }
-
-        Box(
-            modifier = Modifier
-                .size(56.dp)
-                .shadow(
-                    elevation = if (isSelected || isCompleted) 10.dp else 4.dp,
-                    shape = CircleShape,
-                    ambientColor = module.tier.accentPrimary.copy(alpha = 0.28f),
-                    spotColor = module.tier.accentPrimary.copy(alpha = 0.34f)
-                )
-                .clip(CircleShape)
-                .background(nodeGradient)
-                .border(
-                    width = if (isSelected) 2.5.dp else 1.5.dp,
-                    color = when {
-                        isCompleted -> EmeraldSuccess
-                        isSelected -> Color.White
-                        else -> module.tier.accentPrimary.copy(alpha = 0.35f)
-                    },
-                    shape = CircleShape
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = if (isCompleted) Icons.Rounded.Check else module.icon,
-                contentDescription = module.titleEn,
-                tint = if (isSelected || isCompleted) Color.White else module.tier.accentPrimary,
-                modifier = Modifier.size(26.dp)
-            )
-        }
-
-        // Crisp module index badge pill at bottom-right of circle
-        Surface(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .offset(x = (-2).dp, y = (-2).dp),
-            shape = CircleShape,
-            color = if (isSelected) ElectricIndigoDark else CardWhite,
-            border = BorderStroke(1.dp, module.tier.accentPrimary.copy(alpha = 0.35f))
-        ) {
-            Text(
-                text = String.format(Locale.US, "%02d", module.id),
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp),
-                color = if (isSelected) Color.White else module.tier.accentPrimary,
-                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
-            )
-        }
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun ModuleRoadmapCard(
-    module: IeltsModule,
-    isSelected: Boolean,
-    isCompleted: Boolean,
-    onSelect: () -> Unit,
-    onToggleCompleted: () -> Unit,
-    onOpenLearnTab: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val borderColor = when {
-        isSelected -> module.tier.accentPrimary
-        isCompleted -> EmeraldSuccess.copy(alpha = 0.45f)
-        else -> CardBorderSoft
-    }
-
-    Surface(
-        modifier = modifier
-            .shadow(
-                elevation = if (isSelected) 12.dp else 4.dp,
-                shape = RoundedCornerShape(24.dp),
-                ambientColor = module.tier.accentPrimary.copy(alpha = if (isSelected) 0.18f else 0.06f),
-                spotColor = module.tier.accentPrimary.copy(alpha = if (isSelected) 0.24f else 0.10f)
-            )
-            .clip(RoundedCornerShape(24.dp))
-            .clickable(onClick = onSelect)
-            .testTag("roadmap_module_${module.id}"),
-        shape = RoundedCornerShape(24.dp),
-        color = CardWhite,
-        border = BorderStroke(if (isSelected) 2.dp else 1.dp, borderColor)
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 15.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            // Top micro badges
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    if (isSelected) {
-                        Surface(
-                            shape = RoundedCornerShape(50),
-                            color = module.tier.accentPrimary
-                        ) {
-                            Text(
-                                text = stringResource(R.string.module_active_badge),
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                                color = Color.White,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                            )
-                        }
-                    }
-                    if (isCompleted) {
-                        Surface(
-                            shape = RoundedCornerShape(50),
-                            color = EmeraldSuccessLight
-                        ) {
-                            Text(
-                                text = stringResource(R.string.module_completed_badge),
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                                color = EmeraldSuccess,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                            )
-                        }
-                    }
-                    if (!isSelected && !isCompleted) {
-                        Text(
-                            text = "Band ${module.tier.bandRange}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = module.tier.accentPrimary
-                        )
-                    }
-                }
-
-                Icon(
-                    imageVector = if (isCompleted) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
-                    contentDescription = if (isCompleted) "Đã hoàn thành" else "Chưa hoàn thành",
-                    tint = if (isCompleted) EmeraldSuccess else InkMuted.copy(alpha = 0.55f),
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-
-            // Authentic English IELTS Domain Title
-            Text(
-                text = module.titleEn,
-                style = MaterialTheme.typography.titleMedium,
-                color = InkPrimary
-            )
-
-            // Clear Vietnamese Subtitle
-            Text(
-                text = module.titleVi,
-                style = MaterialTheme.typography.bodySmall,
-                color = InkSecondary
-            )
-
-            // Expandable Band 8.5 preview + quick actions when active
-            AnimatedVisibility(
-                visible = isSelected,
-                enter = expandVertically(spring(stiffness = Spring.StiffnessMediumLow)) + fadeIn(tween(200)),
-                exit = shrinkVertically(tween(180)) + fadeOut(tween(150))
-            ) {
-                Column(
-                    modifier = Modifier.padding(top = 6.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Text(
-                        text = module.focusVi,
-                        style = MaterialTheme.typography.bodySmall.copy(fontStyle = FontStyle.Normal),
-                        color = InkMuted
-                    )
-
-                    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                        Text(
-                            text = stringResource(R.string.sample_vocab_label),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = module.tier.accentPrimary
-                        )
-                        FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            module.keyCollocations.forEach { collocation ->
-                                Surface(
-                                    shape = RoundedCornerShape(10.dp),
-                                    color = module.tier.containerColor.copy(alpha = 0.7f)
-                                ) {
-                                    Text(
-                                        text = collocation,
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            fontFamily = PlusJakartaSansFontFamily
-                                        ),
-                                        color = module.tier.accentPrimary,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = onToggleCompleted,
-                            shape = RoundedCornerShape(14.dp),
-                            border = BorderStroke(
-                                1.dp,
-                                if (isCompleted) EmeraldSuccess else module.tier.accentPrimary
-                            ),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
-                            modifier = Modifier
-                                .weight(1f)
-                                .minimumInteractiveComponentSize()
-                                .testTag("complete_module_${module.id}")
-                        ) {
-                            Text(
-                                text = if (isCompleted) {
-                                    stringResource(R.string.mark_in_progress_action)
-                                } else {
-                                    stringResource(R.string.mark_completed_action)
-                                },
-                                style = MaterialTheme.typography.labelSmall,
-                                color = if (isCompleted) EmeraldSuccess else module.tier.accentPrimary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-
-                        Button(
-                            onClick = onOpenLearnTab,
-                            shape = RoundedCornerShape(14.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = module.tier.accentPrimary,
-                                contentColor = Color.White
-                            ),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                            modifier = Modifier
-                                .minimumInteractiveComponentSize()
-                                .testTag("open_learn_module_${module.id}")
-                        ) {
-                            Text(
-                                text = "Học",
-                                style = MaterialTheme.typography.labelMedium
-                            )
-                            Spacer(modifier = Modifier.width(3.dp))
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
-                                contentDescription = null,
-                                modifier = Modifier.size(15.dp)
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun WindingPathConnector(
-    startFraction: Float,
-    endFraction: Float,
-    accentColor: Color,
-    secondaryColor: Color,
-    isLit: Boolean,
-    modifier: Modifier = Modifier
-) {
-    Canvas(modifier = modifier) {
-        val w = size.width
-        val h = size.height
-        val startX = if (startFraction < 0.5f) 33.dp.toPx() else w - 33.dp.toPx()
-        val endX = if (endFraction < 0.5f) 33.dp.toPx() else w - 33.dp.toPx()
-
-        val curvePath = Path().apply {
-            moveTo(startX, 0f)
-            cubicTo(
-                startX, h * 0.58f,
-                endX, h * 0.42f,
-                endX, h
-            )
-        }
-
-        if (isLit) {
-            drawPath(
-                path = curvePath,
-                brush = Brush.verticalGradient(listOf(accentColor, secondaryColor)),
-                style = Stroke(
-                    width = 4.dp.toPx(),
-                    cap = StrokeCap.Round
-                )
-            )
-        } else {
-            drawPath(
-                path = curvePath,
-                color = accentColor.copy(alpha = 0.28f),
-                style = Stroke(
-                    width = 3.dp.toPx(),
-                    cap = StrokeCap.Round,
-                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 12f), 0f)
-                )
-            )
         }
     }
 }

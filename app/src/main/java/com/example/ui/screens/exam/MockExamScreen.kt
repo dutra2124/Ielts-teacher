@@ -11,6 +11,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -20,14 +21,18 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.displayCutoutPadding
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -111,6 +116,7 @@ import com.example.ui.theme.InkMuted
 import com.example.ui.theme.InkPrimary
 import com.example.ui.theme.InkSecondary
 import com.example.ui.theme.LightApexColors
+import com.example.ui.theme.LocalAdaptiveLayoutInfo
 import com.example.ui.theme.PlusJakartaSansFontFamily
 import com.example.ui.theme.RoseAlert
 import kotlinx.coroutines.delay
@@ -129,7 +135,8 @@ private enum class CdReadingTool { HIGHLIGHT, NOTE }
  * Fullscreen Official CD-IELTS Strict Mode Mock Exam Screen (IDP / British Council palette).
  * - Hides Bottom Navigation completely, disables all Animated Teacher/icons & Hints/Dictionary.
  * - Dark slate topbar (#1E293B), Candidate ID, flashing red countdown < 5 min, A-/A+, High Contrast, Submit.
- * - Vertical 20:9 split-screen with draggable resize bar, yellow Highlight (#FEF08A), Notes, Word Count,
+ * - Adaptive split-screen (vertical weight() on Compact portrait; side-by-side Left/Right on >=600dp or landscape)
+ *   with draggable resize bar, yellow Highlight (#FEF08A), Notes, Word Count,
  *   play-once Listening lock, and bottom horizontal question palette (Answered / Unanswered / Flagged).
  */
 @Composable
@@ -413,6 +420,7 @@ fun MockExamScreen(
                 .fillMaxWidth()
                 .background(topbarBg)
                 .statusBarsPadding()
+                .displayCutoutPadding()
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
@@ -454,7 +462,9 @@ fun MockExamScreen(
                 Surface(
                     shape = RoundedCornerShape(10.dp),
                     color = timerBg,
-                    modifier = Modifier.testTag("exam_countdown_timer")
+                    modifier = Modifier
+                        .wrapContentWidth()
+                        .testTag("exam_countdown_timer")
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -468,7 +478,9 @@ fun MockExamScreen(
                                 fontFamily = PlusJakartaSansFontFamily,
                                 fontWeight = FontWeight.ExtraBold
                             ),
-                            color = Color.White
+                            color = Color.White,
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
                 }
@@ -482,11 +494,15 @@ fun MockExamScreen(
                         contentColor = Color.White
                     ),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                    modifier = Modifier.testTag("exam_submit_topbar_button")
+                    modifier = Modifier
+                        .wrapContentWidth()
+                        .testTag("exam_submit_topbar_button")
                 ) {
                     Text(
                         text = stringResource(R.string.exam_submit_btn),
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                        maxLines = 1,
+                        softWrap = false
                     )
                 }
             }
@@ -577,26 +593,13 @@ fun MockExamScreen(
             }
         }
 
-        // VERTICAL SPLIT-SCREEN BODY OPTIMIZED FOR 20:9
-        BoxWithConstraints(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-        ) {
-            val totalHeightPx = with(LocalDensity.current) { maxHeight.toPx().coerceAtLeast(1f) }
-
-            Column(modifier = Modifier.fillMaxSize()) {
-                // TOP PANE: Passage / Listening Player / Writing Prompt / Speaking Cue
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(splitRatio)
-                        .background(pageBg)
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 14.dp, vertical = 10.dp)
-                        .testTag("exam_top_pane")
-                ) {
-                    when (currentSection) {
+        // ADAPTIVE SPLIT-SCREEN BODY:
+        // Compact portrait -> proportional vertical weight() split
+        // Medium/Expanded (>= 600dp) or landscape -> side-by-side Left/Right split panes
+        val layoutInfo = LocalAdaptiveLayoutInfo.current
+        val paneHorizontalPadding = if (layoutInfo.isNarrowCompact) 12.dp else 14.dp
+        val primaryPaneContent: @Composable () -> Unit = {
+            when (currentSection) {
                         ActiveExamSection.READING -> {
                             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 // Reading Highlight & Note Tool Strip
@@ -924,53 +927,11 @@ fun MockExamScreen(
                                 )
                             }
                         }
-                    }
-                }
+            }
+        }
 
-                // DRAGGABLE SPLIT-SCREEN RESIZE HANDLE
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(26.dp)
-                        .background(splitHandleBg)
-                        .pointerInput(totalHeightPx) {
-                            detectVerticalDragGestures { change, dragAmount ->
-                                change.consume()
-                                splitRatio = (splitRatio + dragAmount / totalHeightPx).coerceIn(0.25f, 0.75f)
-                            }
-                        }
-                        .testTag("exam_split_drag_handle"),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.DragHandle,
-                            contentDescription = "Kéo để thay đổi tỷ lệ màn hình trên dưới",
-                            tint = secondaryText,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Text(
-                            text = "Kéo lên / xuống để chỉnh tỷ lệ",
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                            color = secondaryText
-                        )
-                    }
-                }
-
-                // BOTTOM PANE: Questions / Writing Editor / Speaking Response
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f - splitRatio)
-                        .background(pageBg)
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 14.dp, vertical = 10.dp)
-                        .testTag("exam_bottom_pane")
-                ) {
-                    when (currentSection) {
+        val secondaryPaneContent: @Composable () -> Unit = {
+            when (currentSection) {
                         ActiveExamSection.READING, ActiveExamSection.LISTENING -> {
                             val currentQ = sectionQuestions.getOrNull(
                                 activeQuestionIndex.coerceIn(0, (sectionQuestions.size - 1).coerceAtLeast(0))
@@ -1030,7 +991,9 @@ fun MockExamScreen(
                                     Surface(
                                         shape = RoundedCornerShape(8.dp),
                                         color = wordPillBg,
-                                        modifier = Modifier.testTag("exam_writing_word_count")
+                                        modifier = Modifier
+                                            .wrapContentWidth()
+                                            .testTag("exam_writing_word_count")
                                     ) {
                                         Text(
                                             text = "Words: $wordCount / $target",
@@ -1039,6 +1002,8 @@ fun MockExamScreen(
                                                 fontWeight = FontWeight.Bold
                                             ),
                                             color = wordPillFg,
+                                            maxLines = 1,
+                                            softWrap = false,
                                             modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
                                         )
                                     }
@@ -1147,6 +1112,136 @@ fun MockExamScreen(
                                 )
                             }
                         }
+            }
+        }
+
+        val secondaryInsetModifier = if (sectionQuestions.isEmpty()) {
+            Modifier.navigationBarsPadding().imePadding()
+        } else {
+            Modifier.imePadding()
+        }
+
+        BoxWithConstraints(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+        ) {
+            val density = LocalDensity.current
+            val totalHeightPx = with(density) { maxHeight.toPx().coerceAtLeast(1f) }
+            val totalWidthPx = with(density) { maxWidth.toPx().coerceAtLeast(1f) }
+
+            if (layoutInfo.useSideBySideSplit) {
+                // SIDE-BY-SIDE LEFT/RIGHT SPLIT PANES (Tablets / Medium / Expanded / Landscape)
+                Row(modifier = Modifier.fillMaxSize()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .weight(splitRatio)
+                            .background(pageBg)
+                            .verticalScroll(rememberScrollState())
+                            .padding(horizontal = paneHorizontalPadding, vertical = 10.dp)
+                            .testTag("exam_top_pane")
+                    ) {
+                        primaryPaneContent()
+                    }
+
+                    // Draggable vertical divider handle
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .width(24.dp)
+                            .background(splitHandleBg)
+                            .pointerInput(totalWidthPx) {
+                                detectHorizontalDragGestures { change, dragAmount ->
+                                    change.consume()
+                                    splitRatio = (splitRatio + dragAmount / totalWidthPx).coerceIn(0.28f, 0.72f)
+                                }
+                            }
+                            .testTag("exam_split_drag_handle"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .width(4.dp)
+                                .height(42.dp)
+                                .clip(RoundedCornerShape(50))
+                                .background(secondaryText.copy(alpha = 0.55f))
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .weight(1f - splitRatio)
+                            .background(pageBg)
+                            .then(secondaryInsetModifier)
+                            .verticalScroll(rememberScrollState())
+                            .padding(horizontal = paneHorizontalPadding, vertical = 10.dp)
+                            .testTag("exam_bottom_pane")
+                    ) {
+                        secondaryPaneContent()
+                    }
+                }
+            } else {
+                // PROPORTIONAL VERTICAL SPLIT-SCREEN (Compact Portrait: 16:9, 18:9, 19.5:9, 20:9, 21:9)
+                Column(modifier = Modifier.fillMaxSize()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(splitRatio)
+                            .background(pageBg)
+                            .verticalScroll(rememberScrollState())
+                            .padding(horizontal = paneHorizontalPadding, vertical = 10.dp)
+                            .testTag("exam_top_pane")
+                    ) {
+                        primaryPaneContent()
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(26.dp)
+                            .background(splitHandleBg)
+                            .pointerInput(totalHeightPx) {
+                                detectVerticalDragGestures { change, dragAmount ->
+                                    change.consume()
+                                    splitRatio = (splitRatio + dragAmount / totalHeightPx).coerceIn(0.25f, 0.75f)
+                                }
+                            }
+                            .testTag("exam_split_drag_handle"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.DragHandle,
+                                contentDescription = "Kéo để thay đổi tỷ lệ màn hình trên dưới",
+                                tint = secondaryText,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Text(
+                                text = "Kéo lên / xuống để chỉnh tỷ lệ",
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                color = secondaryText,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f - splitRatio)
+                            .background(pageBg)
+                            .then(secondaryInsetModifier)
+                            .verticalScroll(rememberScrollState())
+                            .padding(horizontal = paneHorizontalPadding, vertical = 10.dp)
+                            .testTag("exam_bottom_pane")
+                    ) {
+                        secondaryPaneContent()
                     }
                 }
             }
@@ -1160,6 +1255,7 @@ fun MockExamScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .navigationBarsPadding()
+                    .imePadding()
                     .testTag("exam_question_palette")
             ) {
                 Column(

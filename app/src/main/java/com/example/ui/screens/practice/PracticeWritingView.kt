@@ -7,6 +7,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -15,6 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Send
@@ -69,6 +72,7 @@ import com.example.ui.theme.EmeraldSuccessLight
 import com.example.ui.theme.InkMuted
 import com.example.ui.theme.InkPrimary
 import com.example.ui.theme.InkSecondary
+import com.example.ui.theme.LocalAdaptiveLayoutInfo
 import com.example.ui.theme.PlusJakartaSansFontFamily
 import com.example.ui.theme.PracticeTeal
 import com.example.ui.theme.PracticeTealDark
@@ -78,6 +82,7 @@ import com.example.ui.theme.RoseAlert
 import com.example.ui.theme.SurfaceCanvas
 import com.example.ui.theme.TealOnSurface
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun PracticeWritingView(
     pack: WritingPracticePack,
@@ -88,6 +93,7 @@ fun PracticeWritingView(
     onResetAi: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val layoutInfo = LocalAdaptiveLayoutInfo.current
     var selectedTask by remember(pack.moduleId) { mutableStateOf(WritingTaskType.TASK_2) }
     var showOutline by remember(pack.moduleId) { mutableStateOf(true) }
 
@@ -105,7 +111,7 @@ fun PracticeWritingView(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = layoutInfo.horizontalPadding),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         // Task 1 | Task 2 Selector
@@ -150,6 +156,11 @@ fun PracticeWritingView(
             }
         }
 
+        val promptAndOutlinePane: @Composable () -> Unit = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
         // Prompt Card (+ Visual Data Chart for Task 1)
         Surface(
             shape = RoundedCornerShape(24.dp),
@@ -297,7 +308,14 @@ fun PracticeWritingView(
                 }
             }
         }
+            }
+        }
 
+        val editorAndFeedbackPane: @Composable () -> Unit = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
         // Essay Editor + Automatic Word Count Card
         Surface(
             shape = RoundedCornerShape(24.dp),
@@ -310,15 +328,17 @@ fun PracticeWritingView(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Row(
+                FlowRow(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Surface(
                         shape = RoundedCornerShape(50),
                         color = if (reachedTarget) EmeraldSuccessLight else PracticeTealLight,
-                        modifier = Modifier.testTag("writing_word_count_badge")
+                        modifier = Modifier
+                            .wrapContentWidth()
+                            .testTag("writing_word_count_badge")
                     ) {
                         Text(
                             text = "Word Count: $wordCount / $targetWords từ",
@@ -327,6 +347,8 @@ fun PracticeWritingView(
                                 fontWeight = FontWeight.Bold
                             ),
                             color = if (reachedTarget) EmeraldOnContainer else TealOnSurface,
+                            maxLines = 1,
+                            softWrap = false,
                             modifier = Modifier.padding(horizontal = 11.dp, vertical = 5.dp)
                         )
                     }
@@ -335,6 +357,7 @@ fun PracticeWritingView(
                         shape = RoundedCornerShape(50),
                         color = SurfaceCanvas,
                         modifier = Modifier
+                            .wrapContentWidth()
                             .clip(RoundedCornerShape(50))
                             .clickable { onEssayDraftChange(activePrompt.sampleStarterDraft) }
                             .testTag("writing_fill_sample")
@@ -345,7 +368,13 @@ fun PracticeWritingView(
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                         ) {
                             Icon(Icons.Rounded.Lightbulb, contentDescription = null, tint = TealOnSurface, modifier = Modifier.size(14.dp))
-                            Text("Điền nháp Band 6.0", style = MaterialTheme.typography.labelSmall, color = TealOnSurface)
+                            Text(
+                                text = "Điền nháp Band 6.0",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TealOnSurface,
+                                maxLines = 1,
+                                softWrap = false
+                            )
                         }
                     }
                 }
@@ -476,6 +505,22 @@ fun PracticeWritingView(
             is WritingAiUiState.Success -> {
                 WritingEvaluationCard(evaluation = aiState.result)
             }
+        }
+            }
+        }
+
+        if (layoutInfo.useSideBySideSplit) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                Box(modifier = Modifier.weight(0.95f)) { promptAndOutlinePane() }
+                Box(modifier = Modifier.weight(1.05f)) { editorAndFeedbackPane() }
+            }
+        } else {
+            promptAndOutlinePane()
+            editorAndFeedbackPane()
         }
     }
 }

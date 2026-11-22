@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -86,6 +87,7 @@ fun AndroidPushNotificationBanner(
         modifier = modifier
             .fillMaxWidth()
             .statusBarsPadding()
+            .displayCutoutPadding()
             .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
         if (banner != null) {
@@ -154,12 +156,14 @@ fun AndroidPushNotificationBanner(
                                     modifier = Modifier.size(13.dp)
                                 )
                                 Text(
-                                    text = "ApexIELTS 8.5",
+                                    text = "Master Ielts",
                                     style = MaterialTheme.typography.labelSmall.copy(
                                         fontFamily = PlusJakartaSansFontFamily,
                                         fontWeight = FontWeight.Bold
                                     ),
-                                    color = ElectricIndigo
+                                    color = ElectricIndigo,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                                 Text(
                                     text = "• ${banner.timeLabel}",

@@ -2,6 +2,7 @@ package com.example.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
@@ -11,81 +12,6 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
-private val ApexLightColorScheme = lightColorScheme(
-    primary = ElectricIndigo,
-    onPrimary = InkOnHero,
-    primaryContainer = LightApexColors.electricIndigoLight,
-    onPrimaryContainer = ElectricIndigoDark,
-    secondary = VividViolet,
-    onSecondary = InkOnHero,
-    secondaryContainer = LightApexColors.vividVioletLight,
-    onSecondaryContainer = ElectricIndigoDark,
-    tertiary = CyanGlow,
-    onTertiary = InkOnHero,
-    tertiaryContainer = LightApexColors.cyanGlowLight,
-    onTertiaryContainer = LightApexColors.inkPrimary,
-    background = LightApexColors.surfaceCanvas,
-    onBackground = LightApexColors.inkPrimary,
-    surface = LightApexColors.cardWhite,
-    onSurface = LightApexColors.inkPrimary,
-    surfaceVariant = LightApexColors.cardSurfaceTinted,
-    onSurfaceVariant = LightApexColors.inkSecondary,
-    outline = LightApexColors.cardBorderSoft,
-    outlineVariant = LightApexColors.cardBorderSoft,
-    error = RoseAlert,
-    onError = InkOnHero
-)
-
-private val ApexNightStudyColorScheme = darkColorScheme(
-    primary = Color(0xFF818CF8),
-    onPrimary = Color(0xFF0F172A),
-    primaryContainer = NightStudyApexColors.electricIndigoLight,
-    onPrimaryContainer = Color(0xFFE0E7FF),
-    secondary = Color(0xFFA78BFA),
-    onSecondary = Color(0xFF0F172A),
-    secondaryContainer = NightStudyApexColors.vividVioletLight,
-    onSecondaryContainer = Color(0xFFEDE9FE),
-    tertiary = Color(0xFF22D3EE),
-    onTertiary = Color(0xFF082F49),
-    tertiaryContainer = NightStudyApexColors.cyanGlowLight,
-    onTertiaryContainer = Color(0xFFCFFAFE),
-    background = NightStudyApexColors.surfaceCanvas,
-    onBackground = NightStudyApexColors.inkPrimary,
-    surface = NightStudyApexColors.cardWhite,
-    onSurface = NightStudyApexColors.inkPrimary,
-    surfaceVariant = NightStudyApexColors.cardSurfaceTinted,
-    onSurfaceVariant = NightStudyApexColors.inkSecondary,
-    outline = NightStudyApexColors.cardBorderSoft,
-    outlineVariant = NightStudyApexColors.cardBorderSoft,
-    error = Color(0xFFFB7185),
-    onError = Color(0xFF4C0519)
-)
-
-private val ApexCdIeltsDarkColorScheme = darkColorScheme(
-    primary = Color(0xFF60A5FA),
-    onPrimary = Color(0xFF0B1120),
-    primaryContainer = CdIeltsDarkApexColors.electricIndigoLight,
-    onPrimaryContainer = Color(0xFFDBEAFE),
-    secondary = Color(0xFF94A3B8),
-    onSecondary = Color(0xFF0D1015),
-    secondaryContainer = CdIeltsDarkApexColors.cardSurfaceTinted,
-    onSecondaryContainer = CdIeltsDarkApexColors.inkPrimary,
-    tertiary = Color(0xFF2DD4BF),
-    onTertiary = Color(0xFF042F2E),
-    tertiaryContainer = CdIeltsDarkApexColors.practiceTealLight,
-    onTertiaryContainer = Color(0xFFCCFBF1),
-    background = CdIeltsDarkApexColors.surfaceCanvas,
-    onBackground = CdIeltsDarkApexColors.inkPrimary,
-    surface = CdIeltsDarkApexColors.cardWhite,
-    onSurface = CdIeltsDarkApexColors.inkPrimary,
-    surfaceVariant = CdIeltsDarkApexColors.cardSurfaceTinted,
-    onSurfaceVariant = CdIeltsDarkApexColors.inkSecondary,
-    outline = CdIeltsDarkApexColors.cardBorderSoft,
-    outlineVariant = CdIeltsDarkApexColors.cardBorderSoft,
-    error = Color(0xFFFB7185),
-    onError = Color(0xFF4C0519)
-)
-
 val ApexShapes = Shapes(
     small = RoundedCornerShape(12.dp),
     medium = RoundedCornerShape(18.dp),
@@ -94,34 +20,106 @@ val ApexShapes = Shapes(
 )
 
 /**
- * Resolves the active [ApexColorPalette] from [AppThemeMode] and system dark state.
+ * Resolves the active [ApexColorPalette]. When [examRoomOverrideMode] is non-null,
+ * strictly uses the realistic IDP/British Council CD-IELTS Exam Room palette untouched.
  */
 @Composable
-fun resolveApexPalette(mode: AppThemeMode): ApexColorPalette {
+fun resolveApexPalette(
+    themePrefs: AppThemePreferences,
+    examRoomOverrideMode: AppThemeMode? = null
+): ApexColorPalette {
     val systemDark = isSystemInDarkTheme()
-    return when (mode) {
-        AppThemeMode.LIGHT -> LightApexColors
-        AppThemeMode.NIGHT_STUDY -> NightStudyApexColors
-        AppThemeMode.CD_IELTS_DARK -> CdIeltsDarkApexColors
-        AppThemeMode.SYSTEM -> if (systemDark) NightStudyApexColors else LightApexColors
+    if (examRoomOverrideMode != null) {
+        return when (examRoomOverrideMode) {
+            AppThemeMode.LIGHT -> LightApexColors
+            AppThemeMode.NIGHT_STUDY -> NightStudyApexColors
+            AppThemeMode.CD_IELTS_DARK -> CdIeltsDarkApexColors
+            AppThemeMode.SYSTEM -> if (systemDark) NightStudyApexColors else LightApexColors
+        }
+    }
+    if (themePrefs.mode == AppThemeMode.SYSTEM &&
+        themePrefs.customPrimaryHex == null &&
+        themePrefs.customSurfaceHex == null
+    ) {
+        return if (systemDark) {
+            buildCustomApexPalette(themePrefs.copy(preset = AppThemePreset.DARK_ANTI_GLARE))
+        } else {
+            buildCustomApexPalette(themePrefs)
+        }
+    }
+    return buildCustomApexPalette(themePrefs)
+}
+
+private fun buildMaterialColorScheme(palette: ApexColorPalette): ColorScheme {
+    return if (palette.isDark) {
+        darkColorScheme(
+            primary = palette.primaryAccent,
+            onPrimary = palette.onPrimaryAccent,
+            primaryContainer = palette.electricIndigoLight,
+            onPrimaryContainer = palette.inkPrimary,
+            secondary = palette.secondaryAccent,
+            onSecondary = ThemeContrastUtils.bestOnColor(palette.secondaryAccent),
+            secondaryContainer = palette.vividVioletLight,
+            onSecondaryContainer = palette.inkPrimary,
+            tertiary = CyanGlow,
+            onTertiary = Color(0xFF082F49),
+            tertiaryContainer = palette.cyanGlowLight,
+            onTertiaryContainer = palette.inkPrimary,
+            background = palette.surfaceCanvas,
+            onBackground = palette.inkPrimary,
+            surface = palette.cardWhite,
+            onSurface = palette.inkPrimary,
+            surfaceVariant = palette.cardSurfaceTinted,
+            onSurfaceVariant = palette.inkSecondary,
+            outline = palette.cardBorderSoft,
+            outlineVariant = palette.cardBorderSoft,
+            error = Color(0xFFFB7185),
+            onError = Color(0xFF4C0519)
+        )
+    } else {
+        lightColorScheme(
+            primary = palette.primaryAccent,
+            onPrimary = palette.onPrimaryAccent,
+            primaryContainer = palette.electricIndigoLight,
+            onPrimaryContainer = palette.indigoOnSurface,
+            secondary = palette.secondaryAccent,
+            onSecondary = ThemeContrastUtils.bestOnColor(palette.secondaryAccent),
+            secondaryContainer = palette.vividVioletLight,
+            onSecondaryContainer = palette.indigoOnSurface,
+            tertiary = CyanGlow,
+            onTertiary = Color.White,
+            tertiaryContainer = palette.cyanGlowLight,
+            onTertiaryContainer = palette.inkPrimary,
+            background = palette.surfaceCanvas,
+            onBackground = palette.inkPrimary,
+            surface = palette.cardWhite,
+            onSurface = palette.inkPrimary,
+            surfaceVariant = palette.cardSurfaceTinted,
+            onSurfaceVariant = palette.inkSecondary,
+            outline = palette.cardBorderSoft,
+            outlineVariant = palette.cardBorderSoft,
+            error = RoseAlert,
+            onError = Color.White
+        )
     }
 }
 
 @Composable
 fun ApexIeltsTheme(
-    themeMode: AppThemeMode = AppThemeMode.LIGHT,
+    themePrefs: AppThemePreferences = AppThemePreferences(),
+    examRoomOverrideMode: AppThemeMode? = null,
     content: @Composable () -> Unit
 ) {
-    val systemDark = isSystemInDarkTheme()
-    val palette = resolveApexPalette(themeMode)
-    val colorScheme = when (themeMode) {
-        AppThemeMode.LIGHT -> ApexLightColorScheme
-        AppThemeMode.NIGHT_STUDY -> ApexNightStudyColorScheme
-        AppThemeMode.CD_IELTS_DARK -> ApexCdIeltsDarkColorScheme
-        AppThemeMode.SYSTEM -> if (systemDark) ApexNightStudyColorScheme else ApexLightColorScheme
-    }
+    val palette = resolveApexPalette(
+        themePrefs = themePrefs,
+        examRoomOverrideMode = examRoomOverrideMode
+    )
+    val colorScheme = buildMaterialColorScheme(palette)
 
-    CompositionLocalProvider(LocalApexColors provides palette) {
+    CompositionLocalProvider(
+        LocalApexColors provides palette,
+        LocalAppThemePrefs provides themePrefs
+    ) {
         MaterialTheme(
             colorScheme = colorScheme,
             typography = ApexTypography,

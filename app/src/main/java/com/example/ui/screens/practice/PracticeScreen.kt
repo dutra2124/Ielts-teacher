@@ -11,18 +11,26 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -73,6 +81,7 @@ import com.example.ui.theme.GoldOnContainer
 import com.example.ui.theme.InkOnHero
 import com.example.ui.theme.InkOnHeroMuted
 import com.example.ui.theme.InkPrimary
+import com.example.ui.theme.LocalAdaptiveLayoutInfo
 import com.example.ui.theme.PlusJakartaSansFontFamily
 import com.example.ui.theme.PracticeTeal
 import com.example.ui.theme.PracticeTealDark
@@ -97,6 +106,7 @@ private val PracticeEmeraldGradient = Brush.linearGradient(
  *   1. Soi Ngữ pháp Câu (AI Syntax Breakdown via Firebase AI Logic)
  *   2. Hệ thống Gợi ý Thông minh (3-Level Progressive Hints for R/L; Band 8.5+ Vocab & Idioms for W/S)
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun PracticeScreen(
     uiState: ApexIeltsUiState,
@@ -118,6 +128,7 @@ fun PracticeScreen(
     }
 
     val context = LocalContext.current
+    val layoutInfo = LocalAdaptiveLayoutInfo.current
     val activeModule = uiState.activeModule
     val bundle = remember(activeModule.id) { PracticeCurriculum.bundleForModule(activeModule.id) }
 
@@ -205,6 +216,7 @@ fun PracticeScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .imePadding()
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
@@ -226,7 +238,8 @@ fun PracticeScreen(
                         )
                     }
                     .statusBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                    .displayCutoutPadding()
+                    .padding(horizontal = layoutInfo.horizontalPadding, vertical = 14.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Row(
@@ -238,26 +251,30 @@ fun PracticeScreen(
                         modifier = Modifier.weight(1f),
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Surface(
                                 shape = RoundedCornerShape(50),
                                 color = Color.White.copy(alpha = 0.22f),
-                                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.34f))
+                                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.34f)),
+                                modifier = Modifier.wrapContentWidth()
                             ) {
                                 Text(
                                     text = "Module #${String.format(Locale.US, "%02d", activeModule.id)} • ${activeModule.tier.bandRange}",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = Color.White,
+                                    maxLines = 1,
+                                    softWrap = false,
                                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                                 )
                             }
 
                             Surface(
                                 shape = RoundedCornerShape(50),
-                                color = Color.White.copy(alpha = 0.18f)
+                                color = Color.White.copy(alpha = 0.18f),
+                                modifier = Modifier.wrapContentWidth()
                             ) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
@@ -268,7 +285,9 @@ fun PracticeScreen(
                                     Text(
                                         text = "4 Kỹ năng AI",
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = Color.White
+                                        color = Color.White,
+                                        maxLines = 1,
+                                        softWrap = false
                                     )
                                 }
                             }
@@ -331,7 +350,7 @@ fun PracticeScreen(
                     border = BorderStroke(1.dp, GoldMastery.copy(alpha = 0.55f)),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
+                        .padding(horizontal = layoutInfo.horizontalPadding)
                         .testTag("practice_weak_focus_banner")
                 ) {
                     Row(
@@ -382,7 +401,7 @@ fun PracticeScreen(
                     border = BorderStroke(1.5.dp, PracticeTeal),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
+                        .padding(horizontal = layoutInfo.horizontalPadding)
                         .testTag("syntax_inspect_active_banner")
                 ) {
                     Row(
@@ -658,46 +677,51 @@ private fun PracticeSkillSegmentedBar(
             .fillMaxWidth()
             .testTag("practice_skill_tabs")
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            PracticeSkill.entries.forEach { skill ->
-                val isSelected = skill == selectedSkill
-                val bgColor by animateColorAsState(
-                    targetValue = if (isSelected) CardWhite else Color.Transparent,
-                    animationSpec = tween(200),
-                    label = "practice_pill_bg_${skill.index}"
-                )
-                val textColor by animateColorAsState(
-                    targetValue = if (isSelected) TealOnSurface else Color.White,
-                    animationSpec = tween(200),
-                    label = "practice_pill_text_${skill.index}"
-                )
-
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(50))
-                        .background(bgColor)
-                        .clickable { onSelectSkill(skill) }
-                        .padding(vertical = 9.dp, horizontal = 4.dp)
-                        .testTag("practice_skill_${skill.routeKey}"),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = skill.labelEn,
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontFamily = PlusJakartaSansFontFamily,
-                            fontSize = 11.5.sp,
-                            fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.SemiBold
-                        ),
-                        color = textColor,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            val minSkillWidth = ((maxWidth - 20.dp) / PracticeSkill.entries.size).coerceAtLeast(78.dp)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                PracticeSkill.entries.forEach { skill ->
+                    val isSelected = skill == selectedSkill
+                    val bgColor by animateColorAsState(
+                        targetValue = if (isSelected) CardWhite else Color.Transparent,
+                        animationSpec = tween(200),
+                        label = "practice_pill_bg_${skill.index}"
                     )
+                    val textColor by animateColorAsState(
+                        targetValue = if (isSelected) TealOnSurface else Color.White,
+                        animationSpec = tween(200),
+                        label = "practice_pill_text_${skill.index}"
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .widthIn(min = minSkillWidth)
+                            .wrapContentWidth()
+                            .clip(RoundedCornerShape(50))
+                            .background(bgColor)
+                            .clickable { onSelectSkill(skill) }
+                            .padding(vertical = 9.dp, horizontal = 10.dp)
+                            .testTag("practice_skill_${skill.routeKey}"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = skill.labelEn,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontFamily = PlusJakartaSansFontFamily,
+                                fontSize = 11.5.sp,
+                                fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.SemiBold
+                            ),
+                            color = textColor,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    }
                 }
             }
         }

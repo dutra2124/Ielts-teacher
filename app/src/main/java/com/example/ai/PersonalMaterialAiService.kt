@@ -104,26 +104,39 @@ class PersonalMaterialAiService {
                 $combinedInput
             """.trimIndent()
 
-            try {
-                val response = withTimeout(TIMEOUT_MS) {
-                    model.generateContent(prompt)
-                }
-                val rawText = response.text?.trim().orEmpty()
-                if (rawText.isEmpty()) {
-                    throw IllegalStateException("Gemini AI trả về nội dung trống. Vui lòng thử lại.")
-                }
-                parseResponse(material.id, rawText)
-            } catch (e: TimeoutCancellationException) {
-                Log.e(TAG, "PersonalMaterialAiService timed out", e)
-                throw IllegalStateException("AI phản hồi quá lâu. Vui lòng kiểm tra kết nối mạng và thử lại.")
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.e(TAG, "PersonalMaterialAiService failed", e)
-                throw IllegalStateException(
-                    "Không thể phân tích tài liệu bằng Gemini AI lúc này (${e.localizedMessage ?: "lỗi kết nối"})."
-                )
-            }
+            val rawText = GeminiResilientClient.generateJsonWithFallback(
+                primaryCall = { model.generateContent(prompt).text },
+                prompt = prompt,
+                jsonSchemaHint = """
+                    {
+                      "summary_vi": "string (Vietnamese)",
+                      "key_takeaways_vi": ["string", "string", "string"],
+                      "extracted_words": [
+                        {
+                          "word": "string",
+                          "part_of_speech": "noun|verb|adjective|adverb|phrase",
+                          "cefr_level": "C1|C2",
+                          "ipa_uk": "/.../",
+                          "meaning_vi": "string",
+                          "collocation_en": "string",
+                          "example_en": "string"
+                        }
+                      ],
+                      "grammar_highlights": [
+                        {
+                          "structure_name_en": "string",
+                          "example_quote_en": "string",
+                          "explanation_vi": "string"
+                        }
+                      ]
+                    }
+                """.trimIndent(),
+                temperature = 0.25f,
+                maxOutputTokens = 1400,
+                timeoutMs = TIMEOUT_MS,
+                operationLabelVi = "tóm tắt & rút từ tài liệu cá nhân"
+            )
+            parseResponse(material.id, rawText)
         }
 
     private fun parseResponse(materialId: String, rawJson: String): PersonalMaterialAiSummary {

@@ -3,6 +3,8 @@ package com.example.ui.theme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 
 // ============================================================================
@@ -44,11 +46,20 @@ val Tier3Secondary = Color(0xFFF59E0B)
 val Tier3Container = Color(0xFFFEF3C7)
 
 // ============================================================================
-// Dynamic Theme-Aware Palette (Light / Late-Night Study / CD-IELTS Exam Dark)
+// Dynamic Theme-Aware Palette (Reactive to Presets, Custom Colors & Exam Mode)
 // ============================================================================
 @Immutable
 data class ApexColorPalette(
     val isDark: Boolean,
+    val isHighContrast: Boolean = false,
+    val primaryAccent: Color = ElectricIndigo,
+    val onPrimaryAccent: Color = Color.White,
+    val secondaryAccent: Color = VividViolet,
+    val heroStart: Color = ElectricIndigo,
+    val heroMid: Color = VividViolet,
+    val heroEnd: Color = CyanGlow,
+    val heroInk: Color = InkOnHero,
+    val heroInkMuted: Color = InkOnHeroMuted,
     val surfaceCanvas: Color,
     val cardWhite: Color,
     val cardBorderSoft: Color,
@@ -81,6 +92,15 @@ data class ApexColorPalette(
 
 val LightApexColors = ApexColorPalette(
     isDark = false,
+    isHighContrast = false,
+    primaryAccent = ElectricIndigo,
+    onPrimaryAccent = Color.White,
+    secondaryAccent = VividViolet,
+    heroStart = ElectricIndigo,
+    heroMid = VividViolet,
+    heroEnd = CyanGlow,
+    heroInk = Color.White,
+    heroInkMuted = Color(0xFFE0E7FF),
     surfaceCanvas = Color(0xFFF3F5FB),
     cardWhite = Color(0xFFFFFFFF),
     cardBorderSoft = Color(0xFFE3E8F6),
@@ -111,12 +131,17 @@ val LightApexColors = ApexColorPalette(
     cdIeltsTopbarBar = Color(0xFF1E293B)
 )
 
-/**
- * Late-Night Study Dark Palette: deep warm-navy canvas, elevated obsidian cards,
- * low-glare soft off-white ink, and luminous semantic tints for extended night sessions.
- */
 val NightStudyApexColors = ApexColorPalette(
     isDark = true,
+    isHighContrast = false,
+    primaryAccent = Color(0xFF6366F1),
+    onPrimaryAccent = Color.White,
+    secondaryAccent = Color(0xFF06B6D4),
+    heroStart = Color(0xFF1E1B4B),
+    heroMid = Color(0xFF312E81),
+    heroEnd = Color(0xFF0E7490),
+    heroInk = Color.White,
+    heroInkMuted = Color(0xFFCBD5E1),
     surfaceCanvas = Color(0xFF0B1120),
     cardWhite = Color(0xFF131C31),
     cardBorderSoft = Color(0xFF243350),
@@ -147,12 +172,17 @@ val NightStudyApexColors = ApexColorPalette(
     cdIeltsTopbarBar = Color(0xFF0F172A)
 )
 
-/**
- * CD-IELTS Exam Room Dark Palette: ultra-clean neutral charcoal paper surfaces,
- * minimal chromatic distraction, high-clarity neutral text for 60-minute timed reading & writing.
- */
 val CdIeltsDarkApexColors = ApexColorPalette(
     isDark = true,
+    isHighContrast = false,
+    primaryAccent = Color(0xFF60A5FA),
+    onPrimaryAccent = Color(0xFF0B1120),
+    secondaryAccent = Color(0xFF2DD4BF),
+    heroStart = Color(0xFF111827),
+    heroMid = Color(0xFF1E293B),
+    heroEnd = Color(0xFF0F172A),
+    heroInk = Color.White,
+    heroInkMuted = Color(0xFFCBD5E1),
     surfaceCanvas = Color(0xFF0D1015),
     cardWhite = Color(0xFF151B23),
     cardBorderSoft = Color(0xFF2B3442),
@@ -183,11 +213,121 @@ val CdIeltsDarkApexColors = ApexColorPalette(
     cdIeltsTopbarBar = Color(0xFF0B0F15)
 )
 
+/**
+ * Builds a WCAG high-contrast [ApexColorPalette] dynamically from [AppThemePreferences].
+ */
+fun buildCustomApexPalette(prefs: AppThemePreferences): ApexColorPalette {
+    val preset = prefs.preset
+    val primary = prefs.effectivePrimaryColor
+    val surface = prefs.effectiveSurfaceColor
+    val isDark = prefs.effectiveIsDark
+    val isHc = preset.isHighContrast
+    val onPrimary = ThemeContrastUtils.bestOnColor(primary)
+
+    val base = when {
+        isHc -> CdIeltsDarkApexColors
+        isDark -> NightStudyApexColors
+        else -> LightApexColors
+    }
+
+    val cardColor = when {
+        isHc -> Color(0xFF0C1017)
+        isDark -> ThemeContrastUtils.blend(surface, Color(0xFF1E293B), 0.42f)
+        else -> Color.White
+    }
+
+    val borderColor = when {
+        isHc -> primary.copy(alpha = 0.85f)
+        isDark -> ThemeContrastUtils.blend(cardColor, primary, 0.28f)
+        else -> ThemeContrastUtils.blend(Color(0xFFD8E0F0), primary, 0.14f)
+    }
+
+    val tintedSurface = when {
+        isHc -> Color(0xFF151C28)
+        isDark -> ThemeContrastUtils.blend(cardColor, primary, 0.18f)
+        else -> ThemeContrastUtils.blend(Color.White, primary, 0.08f)
+    }
+
+    val accentLightContainer = when {
+        isHc -> Color(0xFF262006)
+        isDark -> ThemeContrastUtils.blend(cardColor, primary, 0.30f)
+        else -> ThemeContrastUtils.blend(Color.White, primary, 0.15f)
+    }
+
+    // Ensure readable accent text on card surfaces (WCAG >= 4.5:1)
+    val accentOnSurface = if (ThemeContrastUtils.contrastRatio(primary, cardColor) >= 4.2f) {
+        primary
+    } else if (isDark) {
+        ThemeContrastUtils.blend(primary, Color.White, 0.45f)
+    } else {
+        ThemeContrastUtils.blend(primary, Color(0xFF090D16), 0.35f)
+    }
+
+    val heroStart = when {
+        isHc -> Color(0xFF090D16)
+        isDark -> ThemeContrastUtils.blend(primary, Color(0xFF0B1120), 0.45f)
+        else -> primary
+    }
+    val heroMid = when {
+        isHc -> Color(0xFF141B29)
+        else -> ThemeContrastUtils.blend(primary, preset.secondaryColor, 0.55f)
+    }
+    val heroEnd = when {
+        isHc -> Color(0xFF1E293B)
+        isDark -> ThemeContrastUtils.blend(preset.secondaryColor, Color(0xFF0F172A), 0.35f)
+        else -> ThemeContrastUtils.blend(preset.secondaryColor, CyanGlow, 0.38f)
+    }
+    val heroInk = ThemeContrastUtils.bestOnColor(heroStart)
+    val heroInkMuted = heroInk.copy(alpha = 0.84f)
+
+    return base.copy(
+        isDark = isDark,
+        isHighContrast = isHc,
+        primaryAccent = primary,
+        onPrimaryAccent = onPrimary,
+        secondaryAccent = preset.secondaryColor,
+        heroStart = heroStart,
+        heroMid = heroMid,
+        heroEnd = heroEnd,
+        heroInk = heroInk,
+        heroInkMuted = heroInkMuted,
+        surfaceCanvas = surface,
+        cardWhite = cardColor,
+        cardBorderSoft = borderColor,
+        cardSurfaceTinted = tintedSurface,
+        inkPrimary = if (isHc) Color.White else base.inkPrimary,
+        inkSecondary = if (isHc) Color(0xFFE2E8F0) else base.inkSecondary,
+        inkMuted = if (isHc) Color(0xFFCBD5E1) else base.inkMuted,
+        electricIndigoLight = accentLightContainer,
+        indigoOnSurface = accentOnSurface
+    )
+}
+
 val LocalApexColors = staticCompositionLocalOf { LightApexColors }
+val LocalAppThemePrefs = staticCompositionLocalOf { AppThemePreferences() }
 
 // ============================================================================
 // Dynamic Composable Color Accessors (automatically recompose across all screens!)
 // ============================================================================
+val ThemePrimary: Color
+    @Composable get() = LocalApexColors.current.primaryAccent
+
+val ThemeOnPrimary: Color
+    @Composable get() = LocalApexColors.current.onPrimaryAccent
+
+val ThemeSecondary: Color
+    @Composable get() = LocalApexColors.current.secondaryAccent
+
+val ThemeHeroBrush: Brush
+    @Composable get() {
+        val c = LocalApexColors.current
+        return Brush.linearGradient(
+            colors = listOf(c.heroStart, c.heroMid, c.heroEnd),
+            start = Offset(0f, 0f),
+            end = Offset(1100f, 950f)
+        )
+    }
+
 val SurfaceCanvas: Color
     @Composable get() = LocalApexColors.current.surfaceCanvas
 

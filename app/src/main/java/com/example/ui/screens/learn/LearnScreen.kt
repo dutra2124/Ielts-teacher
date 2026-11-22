@@ -10,17 +10,25 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -68,6 +76,7 @@ import com.example.ui.theme.IndigoOnSurface
 import com.example.ui.theme.InkOnHero
 import com.example.ui.theme.InkOnHeroMuted
 import com.example.ui.theme.InkSecondary
+import com.example.ui.theme.LocalAdaptiveLayoutInfo
 import com.example.ui.theme.PlusJakartaSansFontFamily
 import com.example.ui.theme.SurfaceCanvas
 import java.util.Locale
@@ -86,6 +95,7 @@ private val LearnIndigoCyanGradient = Brush.linearGradient(
  * 3. Sắp xếp câu (5 Band 8.5+ Complex Syntax Reordering Exercises)
  * 4. Game & SRS (3 Timed Mini-Games + Persisted SRS Review Queue)
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun LearnScreen(
     uiState: ApexIeltsUiState,
@@ -98,6 +108,7 @@ fun LearnScreen(
     onMiniGameCompleted: (score: Int, total: Int, bestCombo: Int, missedCount: Int) -> Unit,
     onOpenPersonalLibrary: () -> Unit = {},
     onOpenBulkImporter: () -> Unit = {},
+    onShowMessage: (String) -> Unit = {},
     onReturnToRoadmap: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -106,6 +117,7 @@ fun LearnScreen(
     }
 
     val context = LocalContext.current
+    val layoutInfo = LocalAdaptiveLayoutInfo.current
     val activeModule = uiState.activeModule
     val moduleWords = uiState.activeModuleWords
 
@@ -126,6 +138,7 @@ fun LearnScreen(
         modifier = modifier
             .fillMaxSize()
             .background(SurfaceCanvas)
+            .imePadding()
             .verticalScroll(rememberScrollState())
             .testTag("learn_screen"),
         verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -148,7 +161,8 @@ fun LearnScreen(
                     )
                 }
                 .statusBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
+                .displayCutoutPadding()
+                .padding(horizontal = layoutInfo.horizontalPadding, vertical = 14.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Row(
@@ -160,26 +174,30 @@ fun LearnScreen(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Surface(
                             shape = RoundedCornerShape(50),
                             color = Color.White.copy(alpha = 0.22f),
-                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.34f))
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.34f)),
+                            modifier = Modifier.wrapContentWidth()
                         ) {
                             Text(
                                 text = "Module #${String.format(Locale.US, "%02d", activeModule.id)} • ${activeModule.tier.bandRange}",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = Color.White,
+                                maxLines = 1,
+                                softWrap = false,
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                             )
                         }
 
                         Surface(
                             shape = RoundedCornerShape(50),
-                            color = Color.White.copy(alpha = 0.16f)
+                            color = Color.White.copy(alpha = 0.16f),
+                            modifier = Modifier.wrapContentWidth()
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
@@ -195,7 +213,9 @@ fun LearnScreen(
                                 Text(
                                     text = "${moduleWords.size} từ C1–C2",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = Color.White
+                                    color = Color.White,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                         }
@@ -221,79 +241,9 @@ fun LearnScreen(
                 }
 
                 AnimatedFloatingGradCap(
-                    size = 54.dp,
+                    size = 62.dp,
                     contentDescriptionText = "Học từ vựng Band 8.5"
                 )
-            }
-
-            // Quick Access Strip inside Tab 2 (Học): "Tự học & Tài liệu" + "Nhập CSV/JSON"
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = Color.White.copy(alpha = 0.22f),
-                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.36f)),
-                    modifier = Modifier
-                        .weight(1.3f)
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable(onClick = onOpenPersonalLibrary)
-                        .testTag("learn_open_personal_library_btn")
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Book,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(15.dp)
-                        )
-                        Spacer(modifier = Modifier.size(6.dp))
-                        Text(
-                            text = stringResource(R.string.library_quick_access_btn),
-                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                            color = Color.White,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = Color.White.copy(alpha = 0.16f),
-                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.28f)),
-                    modifier = Modifier
-                        .weight(0.95f)
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable(onClick = onOpenBulkImporter)
-                        .testTag("learn_open_bulk_importer_btn")
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.UploadFile,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(15.dp)
-                        )
-                        Spacer(modifier = Modifier.size(5.dp))
-                        Text(
-                            text = "Nhập CSV/JSON",
-                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                            color = Color.White,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
             }
 
             // 4 Segmented Pill Sub-tabs
@@ -317,6 +267,10 @@ fun LearnScreen(
                     srsWordIds = uiState.srsWordIds,
                     speakingAccent = speakingAccent,
                     ttsController = ttsController,
+                    topicHintEn = activeModule.titleEn,
+                    isOnline = uiState.isOnline,
+                    googleCseApiKey = uiState.googleCseApiKey,
+                    googleCseCx = uiState.googleCseCx,
                     onSelectIndex = { selectedWordIndex = it },
                     onWordFlipped = { word -> onMarkWordStudied(word.id) },
                     onAddToSrs = { wordId -> onAddWordToSrs(wordId, true) },
@@ -325,7 +279,8 @@ fun LearnScreen(
                         selectedWordIndex = idx
                         onResetSentenceAi()
                         selectedSubTabIndex = LearnSubTab.AI_SENTENCE.index
-                    }
+                    },
+                    onShowMessage = onShowMessage
                 )
 
                 LearnSubTab.AI_SENTENCE -> AiSentenceSubTab(
@@ -375,50 +330,55 @@ private fun SegmentedLearnPillBar(
             .fillMaxWidth()
             .testTag("learn_segmented_tabs")
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            LearnSubTab.entries.forEach { tab ->
-                val isSelected = tab == selectedTab
-                val bgColor by animateColorAsState(
-                    targetValue = if (isSelected) CardWhite else Color.Transparent,
-                    animationSpec = tween(200),
-                    label = "learn_pill_bg_${tab.index}"
-                )
-                val textColor by animateColorAsState(
-                    targetValue = if (isSelected) IndigoOnSurface else Color.White,
-                    animationSpec = tween(200),
-                    label = "learn_pill_text_${tab.index}"
-                )
-
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(50))
-                        .background(bgColor)
-                        .clickable { onSelectTab(tab) }
-                        .padding(vertical = 9.dp, horizontal = 4.dp)
-                        .testTag("learn_subtab_${tab.index}"),
-                    contentAlignment = Alignment.Center
-                ) {
-                    val label = if (tab == LearnSubTab.GAME_SRS && srsBadgeCount > 0) {
-                        "${tab.shortLabelVi} ($srsBadgeCount)"
-                    } else {
-                        tab.shortLabelVi
-                    }
-                    Text(
-                        text = label,
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontSize = 11.sp,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold
-                        ),
-                        color = textColor,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            val minTabWidth = ((maxWidth - 20.dp) / LearnSubTab.entries.size).coerceAtLeast(78.dp)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                LearnSubTab.entries.forEach { tab ->
+                    val isSelected = tab == selectedTab
+                    val bgColor by animateColorAsState(
+                        targetValue = if (isSelected) CardWhite else Color.Transparent,
+                        animationSpec = tween(200),
+                        label = "learn_pill_bg_${tab.index}"
                     )
+                    val textColor by animateColorAsState(
+                        targetValue = if (isSelected) IndigoOnSurface else Color.White,
+                        animationSpec = tween(200),
+                        label = "learn_pill_text_${tab.index}"
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .widthIn(min = minTabWidth)
+                            .wrapContentWidth()
+                            .clip(RoundedCornerShape(50))
+                            .background(bgColor)
+                            .clickable { onSelectTab(tab) }
+                            .padding(vertical = 9.dp, horizontal = 10.dp)
+                            .testTag("learn_subtab_${tab.index}"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        val label = if (tab == LearnSubTab.GAME_SRS && srsBadgeCount > 0) {
+                            "${tab.shortLabelVi} ($srsBadgeCount)"
+                        } else {
+                            tab.shortLabelVi
+                        }
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontSize = 11.5.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold
+                            ),
+                            color = textColor,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    }
                 }
             }
         }

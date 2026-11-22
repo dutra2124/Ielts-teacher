@@ -1,7 +1,9 @@
 package com.example.ui.screens.dashboard
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
@@ -14,14 +16,17 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.example.data.DiligenceDashboardSnapshot
 import com.example.data.PracticeSkill
+import com.example.data.StreakStatus
 import com.example.speech.CoachVoiceLanguage
 import com.example.speech.CoachVoiceTtsController
+import com.example.ui.theme.LocalAdaptiveLayoutInfo
 
 /**
  * Full "Dashboard Chăm chỉ" view rendered smoothly inside Tab 1 when the user switches
@@ -32,8 +37,10 @@ import com.example.speech.CoachVoiceTtsController
 fun ProgressDashboardContent(
     snapshot: DiligenceDashboardSnapshot,
     streakDays: Int,
+    streakStatus: StreakStatus = StreakStatus(currentStreak = streakDays),
     autoGreetEnabled: Boolean,
     onToggleAutoGreet: (Boolean) -> Unit,
+    onOpenStreakSheet: () -> Unit = {},
     onPracticeWeakSkill: (PracticeSkill, String) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -80,10 +87,12 @@ fun ProgressDashboardContent(
         }
     }
 
+    val layoutInfo = LocalAdaptiveLayoutInfo.current
+
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp)
+            .padding(horizontal = layoutInfo.horizontalPadding)
             .testTag("progress_dashboard_content"),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
@@ -134,35 +143,86 @@ fun ProgressDashboardContent(
             }
         )
 
-        // 2. Diligence Score Card ("Chỉ số chăm chỉ" 0-100% Animated Radial Gauge)
-        DiligenceScoreCard(
-            snapshot = snapshot,
-            streakDays = streakDays
-        )
-
-        // 3. 28-Day Study Consistency Heatmap ("Lịch nhiệt 28 ngày")
-        ConsistencyHeatmapCard(
-            heatmapDays = snapshot.heatmapDays
-        )
-
-        // 4. Weekly Study Activity Vertical Bar Chart (T2-CN vs Daily Target)
-        WeeklyStudyActivityChartCard(
-            bars = snapshot.weeklyBars,
-            dailyTargetMinutes = snapshot.dailyTargetMinutes,
-            weeklyMinutesTotal = snapshot.weeklyMinutesTotal
-        )
-
-        // 5. 4-Skill Band Radar + Progress Bars & Learning Journey Timeline
-        SkillRadarAndJourneyCard(
-            skills = snapshot.skillProgress,
-            milestones = snapshot.milestones,
-            onSkillClick = { skill ->
-                voiceController.stop()
-                onPracticeWeakSkill(
-                    skill,
-                    "Luyện chuyên sâu ${skill.labelEn} từ Dashboard Chăm chỉ"
-                )
+        if (layoutInfo.useSideBySideSplit) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                Box(modifier = Modifier.weight(1f)) {
+                    DiligenceScoreCard(
+                        snapshot = snapshot,
+                        streakDays = streakDays,
+                        streakStatus = streakStatus,
+                        onOpenStreakSheet = onOpenStreakSheet
+                    )
+                }
+                Box(modifier = Modifier.weight(1f)) {
+                    ConsistencyHeatmapCard(
+                        heatmapDays = snapshot.heatmapDays
+                    )
+                }
             }
-        )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                Box(modifier = Modifier.weight(1f)) {
+                    WeeklyStudyActivityChartCard(
+                        bars = snapshot.weeklyBars,
+                        dailyTargetMinutes = snapshot.dailyTargetMinutes,
+                        weeklyMinutesTotal = snapshot.weeklyMinutesTotal
+                    )
+                }
+                Box(modifier = Modifier.weight(1f)) {
+                    SkillRadarAndJourneyCard(
+                        skills = snapshot.skillProgress,
+                        milestones = snapshot.milestones,
+                        onSkillClick = { skill ->
+                            voiceController.stop()
+                            onPracticeWeakSkill(
+                                skill,
+                                "Luyện chuyên sâu ${skill.labelEn} từ Dashboard Chăm chỉ"
+                            )
+                        }
+                    )
+                }
+            }
+        } else {
+            // 2. Diligence Score Card ("Chỉ số chăm chỉ" 0-100% Animated Radial Gauge)
+            DiligenceScoreCard(
+                snapshot = snapshot,
+                streakDays = streakDays,
+                streakStatus = streakStatus,
+                onOpenStreakSheet = onOpenStreakSheet
+            )
+
+            // 3. 28-Day Study Consistency Heatmap ("Lịch nhiệt 28 ngày")
+            ConsistencyHeatmapCard(
+                heatmapDays = snapshot.heatmapDays
+            )
+
+            // 4. Weekly Study Activity Vertical Bar Chart (T2-CN vs Daily Target)
+            WeeklyStudyActivityChartCard(
+                bars = snapshot.weeklyBars,
+                dailyTargetMinutes = snapshot.dailyTargetMinutes,
+                weeklyMinutesTotal = snapshot.weeklyMinutesTotal
+            )
+
+            // 5. 4-Skill Band Radar + Progress Bars & Learning Journey Timeline
+            SkillRadarAndJourneyCard(
+                skills = snapshot.skillProgress,
+                milestones = snapshot.milestones,
+                onSkillClick = { skill ->
+                    voiceController.stop()
+                    onPracticeWeakSkill(
+                        skill,
+                        "Luyện chuyên sâu ${skill.labelEn} từ Dashboard Chăm chỉ"
+                    )
+                }
+            )
+        }
     }
 }

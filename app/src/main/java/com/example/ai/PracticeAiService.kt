@@ -180,34 +180,34 @@ class PracticeAiService {
             4. Provide a smooth academic Vietnamese translation and 1 short reuse tip.
         """.trimIndent()
 
-        try {
-            val response = withTimeout(60_000L) {
-                syntaxModel.generateContent(prompt)
-            }
-            val raw = response.text
-                ?: throw IllegalStateException("AI không trả về dữ liệu phân tích cú pháp.")
-            val json = JSONObject(raw)
-            SyntaxBreakdownResult(
-                sentenceEn = sentenceEn,
-                mainClauseEn = json.optString("mainClauseEn", sentenceEn),
-                mainClauseExplainVi = json.optString("mainClauseExplainVi", ""),
-                subordinateClausesVi = json.optStringList("subordinateClausesVi"),
-                advancedStructuresVi = json.optStringList("advancedStructuresVi"),
-                vietnameseTranslation = json.optString("vietnameseTranslation", ""),
-                band85ReuseTipVi = json.optString("band85ReuseTipVi", "")
-            )
-        } catch (e: TimeoutCancellationException) {
-            Log.e(TAG, "Syntax breakdown timed out", e)
-            throw IllegalStateException("Phân tích cú pháp quá 60 giây. Vui lòng kiểm tra mạng và chạm Thử lại.")
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Log.e(TAG, "Syntax breakdown failed", e)
-            throw IllegalStateException(
-                e.localizedMessage?.takeIf { it.isNotBlank() }
-                    ?: "Không thể kết nối Gemini AI để soi ngữ pháp. Vui lòng thử lại."
-            )
-        }
+        val raw = GeminiResilientClient.generateJsonWithFallback(
+            primaryCall = { syntaxModel.generateContent(prompt).text },
+            prompt = prompt,
+            jsonSchemaHint = """
+                {
+                  "mainClauseEn": "string",
+                  "mainClauseExplainVi": "string (Vietnamese)",
+                  "subordinateClausesVi": ["string (Vietnamese)"],
+                  "advancedStructuresVi": ["string (Vietnamese)"],
+                  "vietnameseTranslation": "string (Vietnamese)",
+                  "band85ReuseTipVi": "string (Vietnamese)"
+                }
+            """.trimIndent(),
+            temperature = 0.25f,
+            maxOutputTokens = 750,
+            timeoutMs = 60_000L,
+            operationLabelVi = "soi ngữ pháp câu"
+        )
+        val json = JSONObject(raw)
+        SyntaxBreakdownResult(
+            sentenceEn = sentenceEn,
+            mainClauseEn = json.optString("mainClauseEn", sentenceEn),
+            mainClauseExplainVi = json.optString("mainClauseExplainVi", ""),
+            subordinateClausesVi = json.optStringList("subordinateClausesVi"),
+            advancedStructuresVi = json.optStringList("advancedStructuresVi"),
+            vietnameseTranslation = json.optString("vietnameseTranslation", ""),
+            band85ReuseTipVi = json.optString("band85ReuseTipVi", "")
+        )
     }
 
     suspend fun evaluateSpeaking(
@@ -225,35 +225,37 @@ class PracticeAiService {
             Evaluate strictly using IELTS Speaking descriptors (FC, LR, GRA) and provide pronunciation advice based on vocabulary/phrasing. Keep Vietnamese feedback concise, specific, and motivating. Provide a natural spoken Band 8.5+ upgraded version keeping the candidate's ideas.
         """.trimIndent()
 
-        try {
-            val response = withTimeout(60_000L) {
-                speakingModel.generateContent(prompt)
-            }
-            val raw = response.text
-                ?: throw IllegalStateException("AI không trả về điểm chấm Speaking.")
-            val json = JSONObject(raw)
-            SpeakingAiEvaluation(
-                overallBand = json.optString("overallBand", "6.5"),
-                fluencyBand = json.optString("fluencyBand", "6.5"),
-                lexicalBand = json.optString("lexicalBand", "6.5"),
-                grammarBand = json.optString("grammarBand", "6.5"),
-                pronunciationTipVi = json.optString("pronunciationTipVi", ""),
-                strengthsVi = json.optStringList("strengthsVi"),
-                improvementsVi = json.optStringList("improvementsVi"),
-                upgradedBand85Answer = json.optString("upgradedBand85Answer", "")
-            )
-        } catch (e: TimeoutCancellationException) {
-            Log.e(TAG, "Speaking evaluation timed out", e)
-            throw IllegalStateException("Chấm Speaking quá 60 giây. Vui lòng kiểm tra mạng và chạm Thử lại.")
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Log.e(TAG, "Speaking evaluation failed", e)
-            throw IllegalStateException(
-                e.localizedMessage?.takeIf { it.isNotBlank() }
-                    ?: "Không thể chấm IELTS Speaking lúc này. Vui lòng thử lại."
-            )
-        }
+        val raw = GeminiResilientClient.generateJsonWithFallback(
+            primaryCall = { speakingModel.generateContent(prompt).text },
+            prompt = prompt,
+            jsonSchemaHint = """
+                {
+                  "overallBand": "7.0",
+                  "fluencyBand": "7.0",
+                  "lexicalBand": "7.0",
+                  "grammarBand": "7.0",
+                  "pronunciationTipVi": "string (Vietnamese)",
+                  "strengthsVi": ["string", "string"],
+                  "improvementsVi": ["string", "string"],
+                  "upgradedBand85Answer": "string (English Band 8.5+)"
+                }
+            """.trimIndent(),
+            temperature = 0.35f,
+            maxOutputTokens = 820,
+            timeoutMs = 60_000L,
+            operationLabelVi = "chấm IELTS Speaking"
+        )
+        val json = JSONObject(raw)
+        SpeakingAiEvaluation(
+            overallBand = json.optString("overallBand", "6.5"),
+            fluencyBand = json.optString("fluencyBand", "6.5"),
+            lexicalBand = json.optString("lexicalBand", "6.5"),
+            grammarBand = json.optString("grammarBand", "6.5"),
+            pronunciationTipVi = json.optString("pronunciationTipVi", ""),
+            strengthsVi = json.optStringList("strengthsVi"),
+            improvementsVi = json.optStringList("improvementsVi"),
+            upgradedBand85Answer = json.optString("upgradedBand85Answer", "")
+        )
     }
 
     suspend fun evaluateWriting(
@@ -272,35 +274,37 @@ class PracticeAiService {
             Score all 4 IELTS Writing criteria (TR/TA, CC, LR, GRA). Write clear, high-impact feedback and 3 concrete fixes in Vietnamese. Rewrite the strongest core paragraph into Band 8.5+ academic English preserving the candidate's argument.
         """.trimIndent()
 
-        try {
-            val response = withTimeout(60_000L) {
-                writingModel.generateContent(prompt)
-            }
-            val raw = response.text
-                ?: throw IllegalStateException("AI không trả về điểm chấm Writing.")
-            val json = JSONObject(raw)
-            WritingAiEvaluation(
-                overallBand = json.optString("overallBand", "6.5"),
-                taskResponseBand = json.optString("taskResponseBand", "6.5"),
-                coherenceBand = json.optString("coherenceBand", "6.5"),
-                lexicalBand = json.optString("lexicalBand", "6.5"),
-                grammarBand = json.optString("grammarBand", "6.5"),
-                summaryFeedbackVi = json.optString("summaryFeedbackVi", ""),
-                keyFixesVi = json.optStringList("keyFixesVi"),
-                upgradedBand85Excerpt = json.optString("upgradedBand85Excerpt", "")
-            )
-        } catch (e: TimeoutCancellationException) {
-            Log.e(TAG, "Writing evaluation timed out", e)
-            throw IllegalStateException("Chấm Writing quá 60 giây. Vui lòng kiểm tra mạng và chạm Thử lại.")
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Log.e(TAG, "Writing evaluation failed", e)
-            throw IllegalStateException(
-                e.localizedMessage?.takeIf { it.isNotBlank() }
-                    ?: "Không thể chấm IELTS Writing lúc này. Vui lòng thử lại."
-            )
-        }
+        val raw = GeminiResilientClient.generateJsonWithFallback(
+            primaryCall = { writingModel.generateContent(prompt).text },
+            prompt = prompt,
+            jsonSchemaHint = """
+                {
+                  "overallBand": "7.0",
+                  "taskResponseBand": "7.0",
+                  "coherenceBand": "7.0",
+                  "lexicalBand": "7.0",
+                  "grammarBand": "7.0",
+                  "summaryFeedbackVi": "string (Vietnamese)",
+                  "keyFixesVi": ["string", "string", "string"],
+                  "upgradedBand85Excerpt": "string (Band 8.5+ academic paragraph)"
+                }
+            """.trimIndent(),
+            temperature = 0.30f,
+            maxOutputTokens = 860,
+            timeoutMs = 60_000L,
+            operationLabelVi = "chấm IELTS Writing"
+        )
+        val json = JSONObject(raw)
+        WritingAiEvaluation(
+            overallBand = json.optString("overallBand", "6.5"),
+            taskResponseBand = json.optString("taskResponseBand", "6.5"),
+            coherenceBand = json.optString("coherenceBand", "6.5"),
+            lexicalBand = json.optString("lexicalBand", "6.5"),
+            grammarBand = json.optString("grammarBand", "6.5"),
+            summaryFeedbackVi = json.optString("summaryFeedbackVi", ""),
+            keyFixesVi = json.optStringList("keyFixesVi"),
+            upgradedBand85Excerpt = json.optString("upgradedBand85Excerpt", "")
+        )
     }
 }
 

@@ -74,6 +74,8 @@ data class NotificationPreferences(
     val masterEnabled: Boolean = true,
     val slots: List<ReminderSlot> = DefaultHabitData.defaultSlots,
     val repeatDays: Set<String> = WeekdayItem.allIds,
+    val testSlots: List<ReminderSlot> = DefaultHabitData.defaultTestSlots,
+    val testRepeatDays: Set<String> = DefaultHabitData.defaultTestRepeatDays,
     val tone: ReminderTone = ReminderTone.GENTLE
 )
 
@@ -122,6 +124,21 @@ object DefaultHabitData {
         )
     )
 
+    val defaultTestSlots: List<ReminderSlot> = listOf(
+        ReminderSlot(
+            id = "test_slot_weekend_mock",
+            hour = 9,
+            minute = 0,
+            labelVi = "Thi thử CD-IELTS & Kiểm tra Module",
+            enabled = true
+        )
+    )
+
+    val defaultTestRepeatDays: Set<String> = setOf(
+        WeekdayItem.SAT.id,
+        WeekdayItem.SUN.id
+    )
+
     fun serializeSlots(slots: List<ReminderSlot>): String {
         return slots.joinToString(separator = "\n") { slot ->
             val safeLabel = slot.labelVi.replace("|", " ").replace("\n", " ").trim()
@@ -129,8 +146,8 @@ object DefaultHabitData {
         }
     }
 
-    fun deserializeSlots(raw: String?): List<ReminderSlot> {
-        if (raw == null) return defaultSlots
+    fun deserializeSlots(raw: String?, fallback: List<ReminderSlot> = defaultSlots): List<ReminderSlot> {
+        if (raw == null) return fallback
         if (raw.isBlank()) return emptyList()
         return raw.lines()
             .mapNotNull { line ->

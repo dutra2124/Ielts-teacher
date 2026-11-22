@@ -31,10 +31,10 @@ object ApexNotificationHelper {
             if (existing == null) {
                 val channel = NotificationChannel(
                     CHANNEL_ID,
-                    "Nhắc học IELTS hằng ngày",
+                    "Nhắc học Master Ielts hằng ngày",
                     NotificationManager.IMPORTANCE_HIGH
                 ).apply {
-                    description = "Thông báo khung giờ học từ vựng và luyện đề Band 8.5 từ trợ giảng AI."
+                    description = "Thông báo khung giờ học từ vựng và luyện đề Band 8.5 từ trợ giảng AI Master Ielts."
                 }
                 manager.createNotificationChannel(channel)
             }
@@ -60,12 +60,12 @@ object ApexNotificationHelper {
         val sampleCollocation = activeModule.keyCollocations.firstOrNull() ?: "academic precision"
         return when (tone) {
             ReminderTone.GENTLE -> {
-                val title = "Cô Minh Anh AI • $slotLabelVi"
+                val title = "Master Ielts • Cô Minh Anh AI ($slotLabelVi)"
                 val body = "Chào bạn! Dành vài phút ôn chủ đề \"${activeModule.titleEn}\" và cụm \"$sampleCollocation\" để giữ chuỗi học nhé!"
                 title to body
             }
             ReminderTone.STRICT -> {
-                val title = "Kỷ luật Band 8.5 • $slotLabelVi"
+                val title = "Master Ielts • Kỷ luật Band 8.5 ($slotLabelVi)"
                 val body = "Đến giờ học rồi! Vào ngay \"${activeModule.titleEn}\" — thành thạo \"$sampleCollocation\" hôm nay, không trì hoãn!"
                 title to body
             }

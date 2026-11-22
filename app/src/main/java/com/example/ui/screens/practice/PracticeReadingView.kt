@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.BorderColor
@@ -75,6 +76,7 @@ import com.example.ui.theme.HighlightYellowBorder
 import com.example.ui.theme.InkMuted
 import com.example.ui.theme.InkPrimary
 import com.example.ui.theme.InkSecondary
+import com.example.ui.theme.LocalAdaptiveLayoutInfo
 import com.example.ui.theme.PlusJakartaSansFontFamily
 import com.example.ui.theme.PracticeTeal
 import com.example.ui.theme.PracticeTealDark
@@ -112,12 +114,9 @@ fun PracticeReadingView(
         pack.sentences.groupBy { it.paragraphLabel }.entries.toList()
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
+    val layoutInfo = LocalAdaptiveLayoutInfo.current
+
+    val passagePane: @Composable () -> Unit = {
         // Passage Header & Reading Tools Bar (Highlight / Note / Syntax Inspect status)
         Surface(
             shape = RoundedCornerShape(24.dp),
@@ -130,26 +129,32 @@ fun PracticeReadingView(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Row(
+                FlowRow(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Surface(
                         shape = RoundedCornerShape(8.dp),
-                        color = PracticeTealLight
+                        color = PracticeTealLight,
+                        modifier = Modifier.wrapContentWidth()
                     ) {
                         Text(
                             text = "IELTS Academic Reading • ~${pack.estimatedMinutes} phút",
                             style = MaterialTheme.typography.labelSmall,
                             color = PracticeTealDark,
+                            maxLines = 1,
+                            softWrap = false,
                             modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
                         )
                     }
                     Text(
                         text = "${highlightedIds.count { it.value }} highlight • ${sentenceNotes.count { it.value.isNotBlank() }} note",
                         style = MaterialTheme.typography.labelSmall,
-                        color = InkMuted
+                        color = InkMuted,
+                        maxLines = 1,
+                        softWrap = false,
+                        modifier = Modifier.align(Alignment.CenterVertically)
                     )
                 }
 
@@ -220,7 +225,9 @@ fun PracticeReadingView(
                                 Text(
                                     text = mode.labelVi,
                                     style = MaterialTheme.typography.labelMedium,
-                                    color = if (selected) InkPrimary else InkSecondary
+                                    color = if (selected) InkPrimary else InkSecondary,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                         }
@@ -363,7 +370,13 @@ fun PracticeReadingView(
                 }
             }
         }
+    }
 
+    val questionsPane: @Composable () -> Unit = {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
         // Headings Bank Reference Card for Matching Headings questions
         if (pack.headingsBank.isNotEmpty()) {
             Surface(
@@ -472,6 +485,30 @@ fun PracticeReadingView(
                 scoreText = "Kết quả: $score / ${pack.questions.size} câu đúng",
                 rows = pack.questions.map { it.keywordMapping }
             )
+        }
+        }
+    }
+
+    if (layoutInfo.useSideBySideSplit) {
+        Row(
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(horizontal = layoutInfo.horizontalPadding),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            Box(modifier = Modifier.weight(1.05f)) { passagePane() }
+            Box(modifier = Modifier.weight(0.95f)) { questionsPane() }
+        }
+    } else {
+        Column(
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(horizontal = layoutInfo.horizontalPadding),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            passagePane()
+            questionsPane()
         }
     }
 

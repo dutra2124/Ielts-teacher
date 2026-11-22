@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "ApexIELTS 8.5"
+rootProject.name = "Master Ielts"
 
 include(":app")

@@ -14,7 +14,7 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * In-App CSV / JSON Bulk Importer & Validator for ApexIELTS 8.5.
+ * In-App CSV / JSON Bulk Importer & Validator for Master Ielts.
  * Supports UTF-8 Vietnamese text, RFC-4180 quoted commas, and structured JSON arrays/objects
  * across all 4 target datasets: Vocabulary, Sentence Drills, Exams, and Personal Materials.
  */

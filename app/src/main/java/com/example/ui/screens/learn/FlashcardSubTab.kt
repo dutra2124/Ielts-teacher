@@ -103,10 +103,15 @@ fun FlashcardSubTab(
     srsWordIds: Set<String>,
     speakingAccent: EnglishAccent?,
     ttsController: ApexTtsController,
+    topicHintEn: String = "",
+    isOnline: Boolean = true,
+    googleCseApiKey: String = "",
+    googleCseCx: String = "",
     onSelectIndex: (Int) -> Unit,
     onWordFlipped: (VocabWordItem) -> Unit,
     onAddToSrs: (String) -> Unit,
     onBuildSentenceWithWord: (VocabWordItem) -> Unit,
+    onShowMessage: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     if (words.isEmpty()) return
@@ -242,13 +247,18 @@ fun FlashcardSubTab(
                 .testTag("flashcard_3d_container")
         ) {
             if (flipRotation <= 90f) {
-                // FRONT FACE: C1-C2 Word, UK/US IPA, TTS Audio Buttons + Voice Pronunciation Check
+                // FRONT FACE: C1-C2 Word, Auto-Fetched Illustration, UK/US IPA, TTS Audio, External Links & Voice Check
                 FlashcardFrontFace(
                     word = word,
+                    topicHintEn = topicHintEn,
+                    isOnline = isOnline,
+                    googleCseApiKey = googleCseApiKey,
+                    googleCseCx = googleCseCx,
                     speakingAccent = speakingAccent,
                     isListeningVoice = isListeningVoice,
                     pronunciationResult = pronunciationResult,
                     voiceErrorVi = voiceErrorVi,
+                    onShowMessage = onShowMessage,
                     onFlip = {
                         isFlipped = true
                         onWordFlipped(word)
@@ -358,10 +368,15 @@ fun FlashcardSubTab(
 @Composable
 private fun FlashcardFrontFace(
     word: VocabWordItem,
+    topicHintEn: String,
+    isOnline: Boolean,
+    googleCseApiKey: String,
+    googleCseCx: String,
     speakingAccent: EnglishAccent?,
     isListeningVoice: Boolean,
     pronunciationResult: PronunciationResult?,
     voiceErrorVi: String?,
+    onShowMessage: (String) -> Unit,
     onFlip: () -> Unit,
     onSpeak: (EnglishAccent) -> Unit,
     onToggleVoiceCheck: () -> Unit
@@ -459,6 +474,15 @@ private fun FlashcardFrontFace(
                 )
             }
 
+            // Auto-Fetched Rounded Vocabulary Illustration (Coil + Wikipedia/Wikimedia or Google CSE + Shimmer/Vector Fallback)
+            VocabIllustrationPreview(
+                word = word,
+                topicHintEn = topicHintEn,
+                isOnline = isOnline,
+                googleCseApiKey = googleCseApiKey,
+                googleCseCx = googleCseCx
+            )
+
             // UK & US IPA + Text-to-Speech Audio Buttons with Animated Waveform
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -479,6 +503,12 @@ private fun FlashcardFrontFace(
                     modifier = Modifier.weight(1f)
                 )
             }
+
+            // Quick 1-Tap External Reference Links (Wikipedia, Cambridge/Oxford Dictionary, Google Images)
+            VocabExternalLinksRow(
+                word = word,
+                onShowMessage = onShowMessage
+            )
 
             HorizontalDivider(color = CardBorderSoft)
 

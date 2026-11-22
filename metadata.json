@@ -1,5 +1,5 @@
 {
-  "name": "ApexIELTS 8.5",
+  "name": "Master Ielts",
   "description": "Ứng dụng luyện thi IELTS thông minh song ngữ Việt–Anh giúp nâng band từ 6.0 lên 8.5 với lộ trình 12 chủ đề và trợ giảng AI sinh động.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

@@ -86,46 +86,44 @@ class SentenceCoachAiService {
             Evaluate usage of "$targetWord" concisely. Write feedback and corrections in Vietnamese. Rewrite into a Band 8.5+ academic English sentence preserving the exact original meaning.
         """.trimIndent()
 
-        try {
-            Log.d(TAG, "Starting Gemini evaluation for word='$targetWord'")
-            val response = withTimeout(60_000L) {
-                fastModel.generateContent(prompt)
-            }
-            val jsonString = response.text
-                ?: throw IllegalStateException("Mô hình AI không trả về dữ liệu. Vui lòng thử lại.")
+        Log.d(TAG, "Starting Gemini evaluation for word='$targetWord'")
+        val jsonString = GeminiResilientClient.generateJsonWithFallback(
+            primaryCall = { fastModel.generateContent(prompt).text },
+            prompt = prompt,
+            jsonSchemaHint = """
+                {
+                  "estimatedBand": "6.5",
+                  "naturalnessScore": 75,
+                  "naturalnessFeedbackVi": "string (Vietnamese 1-2 sentences)",
+                  "correctionsVi": ["string (Vietnamese)", "string (Vietnamese)"],
+                  "upgradedBand85Sentence": "string (Band 8.5+ English sentence)",
+                  "upgradeHighlightVi": "string (Vietnamese 1 sentence)"
+                }
+            """.trimIndent(),
+            temperature = 0.35f,
+            maxOutputTokens = 650,
+            timeoutMs = 60_000L,
+            operationLabelVi = "chấm câu đặt từ vựng"
+        )
 
-            val json = JSONObject(jsonString)
-            val correctionsJson = json.optJSONArray("correctionsVi")
-            val corrections = buildList {
-                if (correctionsJson != null) {
-                    for (i in 0 until correctionsJson.length()) {
-                        val item = correctionsJson.optString(i).trim()
-                        if (item.isNotEmpty()) add(item)
-                    }
+        val json = JSONObject(jsonString)
+        val correctionsJson = json.optJSONArray("correctionsVi")
+        val corrections = buildList {
+            if (correctionsJson != null) {
+                for (i in 0 until correctionsJson.length()) {
+                    val item = correctionsJson.optString(i).trim()
+                    if (item.isNotEmpty()) add(item)
                 }
             }
-
-            AiSentenceEvaluation(
-                estimatedBand = json.optString("estimatedBand", "6.5"),
-                naturalnessScore = json.optInt("naturalnessScore", 72).coerceIn(0, 100),
-                naturalnessFeedbackVi = json.optString("naturalnessFeedbackVi", ""),
-                correctionsVi = corrections,
-                upgradedBand85Sentence = json.optString("upgradedBand85Sentence", ""),
-                upgradeHighlightVi = json.optString("upgradeHighlightVi", "")
-            )
-        } catch (e: TimeoutCancellationException) {
-            Log.e(TAG, "Gemini evaluation timed out after 60s", e)
-            throw IllegalStateException(
-                "Kết nối Gemini AI phản hồi chậm quá 60 giây. Vui lòng kiểm tra mạng và chạm Thử lại."
-            )
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Log.e(TAG, "Firebase AI Logic evaluation failed", e)
-            throw IllegalStateException(
-                e.localizedMessage?.takeIf { it.isNotBlank() }
-                    ?: "Không thể kết nối Gemini AI. Vui lòng kiểm tra mạng và thử lại."
-            )
         }
+
+        AiSentenceEvaluation(
+            estimatedBand = json.optString("estimatedBand", "6.5"),
+            naturalnessScore = json.optInt("naturalnessScore", 72).coerceIn(0, 100),
+            naturalnessFeedbackVi = json.optString("naturalnessFeedbackVi", ""),
+            correctionsVi = corrections,
+            upgradedBand85Sentence = json.optString("upgradedBand85Sentence", ""),
+            upgradeHighlightVi = json.optString("upgradeHighlightVi", "")
+        )
     }
 }

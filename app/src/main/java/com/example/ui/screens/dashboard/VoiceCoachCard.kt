@@ -84,6 +84,8 @@ import com.example.ui.theme.LocalApexColors
 import com.example.ui.theme.PlusJakartaSansFontFamily
 import com.example.ui.theme.PracticeTeal
 import com.example.ui.theme.StreakOrange
+import com.example.ui.theme.ThemeOnPrimary
+import com.example.ui.theme.ThemePrimary
 import com.example.ui.theme.VividViolet
 
 private val WarmCoachHeroLight = Brush.linearGradient(
@@ -254,6 +256,9 @@ fun VoiceCoachCard(
             }
 
             // Prominent Primary CTA: "Nghe cô giáo động viên" + Pause / Next Quote
+            val primaryAccent = ThemePrimary
+            val onPrimaryAccent = ThemeOnPrimary
+            val highContrast = LocalApexColors.current.isHighContrast
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -263,9 +268,11 @@ fun VoiceCoachCard(
                     onClick = if (isSpeaking) onPause else onPlayOrResume,
                     shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isSpeaking) StreakOrange else ElectricIndigo,
-                        contentColor = Color.White
+                        containerColor = if (isSpeaking) StreakOrange else primaryAccent,
+                        contentColor = if (isSpeaking) Color.White else onPrimaryAccent
                     ),
+                    border = if (highContrast) BorderStroke(1.5.dp, onPrimaryAccent.copy(alpha = 0.55f)) else null,
+                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 3.dp),
                     modifier = Modifier
                         .weight(1f)
                         .height(48.dp)
@@ -287,7 +294,7 @@ fun VoiceCoachCard(
                             isPaused -> "Nghe tiếp lời động viên"
                             else -> stringResource(R.string.dashboard_listen_coach_btn)
                         },
-                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.ExtraBold),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -296,7 +303,7 @@ fun VoiceCoachCard(
                 OutlinedButton(
                     onClick = onNextQuote,
                     shape = RoundedCornerShape(16.dp),
-                    border = BorderStroke(1.dp, ElectricIndigo.copy(alpha = 0.45f)),
+                    border = BorderStroke(if (highContrast) 1.5.dp else 1.dp, primaryAccent.copy(alpha = 0.65f)),
                     modifier = Modifier
                         .height(48.dp)
                         .testTag("coach_voice_next_quote_btn")
@@ -304,14 +311,14 @@ fun VoiceCoachCard(
                     Icon(
                         imageVector = Icons.Rounded.SkipNext,
                         contentDescription = "Lời động viên tiếp theo",
-                        tint = IndigoOnSurface,
+                        tint = primaryAccent,
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(3.dp))
                     Text(
                         text = "Câu khác",
                         style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                        color = IndigoOnSurface
+                        color = primaryAccent
                     )
                 }
             }
@@ -401,8 +408,8 @@ fun VoiceCoachCard(
                         checked = autoGreetEnabled,
                         onCheckedChange = onToggleAutoGreet,
                         colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.White,
-                            checkedTrackColor = ElectricIndigo
+                            checkedThumbColor = onPrimaryAccent,
+                            checkedTrackColor = primaryAccent
                         ),
                         modifier = Modifier.testTag("dashboard_auto_greet_switch")
                     )
@@ -465,12 +472,14 @@ fun VoiceCoachCard(
                         onClick = { onPracticeWeakSkill(weakArea.weakSkill, weakArea.focusNoteVi) },
                         shape = RoundedCornerShape(14.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = PracticeTeal,
-                            contentColor = Color.White
+                            containerColor = primaryAccent,
+                            contentColor = onPrimaryAccent
                         ),
+                        border = if (highContrast) BorderStroke(1.5.dp, onPrimaryAccent.copy(alpha = 0.55f)) else null,
+                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 3.dp),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(46.dp)
+                            .height(48.dp)
                             .testTag("dashboard_weak_area_cta_btn")
                     ) {
                         Icon(

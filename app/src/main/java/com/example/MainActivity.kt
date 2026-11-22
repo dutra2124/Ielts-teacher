@@ -9,6 +9,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.mutableStateOf
 import com.example.ai.configureAppCheck
+import com.example.data.importer.DocumentTextExtractor
 import com.example.notifications.ApexNotificationHelper
 import com.example.ui.ApexIeltsApp
 
@@ -21,6 +22,7 @@ class MainActivity : ComponentActivity() {
 
         // STEP 1: Configure Firebase App Check with launch intent before UI, ViewModels, or Firebase calls
         configureAppCheck(this, intent)
+        DocumentTextExtractor.ensurePdfBoxInitialized(applicationContext)
 
         handleNotificationIntent(intent)
         applySystemBarsForTheme(isDark = false)

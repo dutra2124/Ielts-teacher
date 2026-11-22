@@ -87,56 +87,140 @@ class ReviewDiffAiService {
                - Write categoryVi and explanationVi in clear, actionable Vietnamese.
         """.trimIndent()
 
-        try {
-            val response = withTimeout(60_000L) {
-                diffModel.generateContent(prompt)
-            }
-            val raw = response.text
-                ?: throw IllegalStateException("AI không trả về bản so sánh nâng cấp.")
-            val json = JSONObject(raw)
-            val upgradedText = json.optString("upgradedText", "").trim()
-            val changesArr = json.optJSONArray("changes")
-            val changes = buildList {
-                if (changesArr != null) {
-                    for (i in 0 until changesArr.length()) {
-                        val c = changesArr.optJSONObject(i) ?: continue
-                        val weak = c.optString("weakPhraseEn").trim()
-                        val up = c.optString("upgradedPhraseEn").trim()
-                        if (weak.isNotEmpty() && up.isNotEmpty()) {
-                            add(
-                                UpgradeDiffChange(
-                                    id = "ai_diff_${System.currentTimeMillis()}_$i",
-                                    weakPhraseEn = weak,
-                                    upgradedPhraseEn = up,
-                                    categoryVi = c.optString("categoryVi", "Band 8.5+ Upgrade"),
-                                    explanationVi = c.optString("explanationVi", "")
-                                )
+        val raw = GeminiResilientClient.generateJsonWithFallback(
+            primaryCall = { diffModel.generateContent(prompt).text },
+            prompt = prompt,
+            jsonSchemaHint = """
+                {
+                  "upgradedText": "string (Band 8.5+ rewritten response)",
+                  "changes": [
+                    {
+                      "weakPhraseEn": "exact verbatim phrase from original",
+                      "upgradedPhraseEn": "exact verbatim phrase in upgradedText",
+                      "categoryVi": "Lexical Resource (C2)",
+                      "explanationVi": "string (Vietnamese)"
+                    }
+                  ]
+                }
+            """.trimIndent(),
+            temperature = 0.30f,
+            maxOutputTokens = 950,
+            timeoutMs = 60_000L,
+            operationLabelVi = "tạo bản so sánh nâng cấp Band 8.5+"
+        )
+        val json = JSONObject(raw)
+        val upgradedText = json.optString("upgradedText", "").trim()
+        val changesArr = json.optJSONArray("changes")
+        val changes = buildList {
+            if (changesArr != null) {
+                for (i in 0 until changesArr.length()) {
+                    val c = changesArr.optJSONObject(i) ?: continue
+                    val weak = c.optString("weakPhraseEn").trim()
+                    val up = c.optString("upgradedPhraseEn").trim()
+                    if (weak.isNotEmpty() && up.isNotEmpty()) {
+                        add(
+                            UpgradeDiffChange(
+                                id = "ai_diff_${System.currentTimeMillis()}_$i",
+                                weakPhraseEn = weak,
+                                upgradedPhraseEn = up,
+                                categoryVi = c.optString("categoryVi", "Band 8.5+ Upgrade"),
+                                explanationVi = c.optString("explanationVi", "")
                             )
-                        }
+                        )
                     }
                 }
             }
-
-            UpgradeDiffComparison(
-                id = "ai_comp_${System.currentTimeMillis()}",
-                skillLabel = "$skillLabel • Gemini AI Diff",
-                promptSummaryEn = promptSummaryEn,
-                originalText = originalText,
-                upgradedText = upgradedText.ifBlank { originalText },
-                changes = changes,
-                isAiGenerated = true
-            )
-        } catch (e: TimeoutCancellationException) {
-            Log.e(TAG, "Review diff generation timed out", e)
-            throw IllegalStateException("Tạo bản so sánh nâng cấp quá 60 giây. Vui lòng thử lại.")
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Log.e(TAG, "Review diff generation failed", e)
-            throw IllegalStateException(
-                e.localizedMessage?.takeIf { it.isNotBlank() }
-                    ?: "Không thể tạo bản so sánh Band 8.5+ lúc này. Vui lòng thử lại."
-            )
         }
+
+        UpgradeDiffComparison(
+            id = "ai_comp_${System.currentTimeMillis()}",
+            skillLabel = "$skillLabel • Gemini AI Diff",
+            promptSummaryEn = promptSummaryEn,
+            originalText = originalText,
+            upgradedText = upgradedText.ifBlank { originalText },
+            changes = changes,
+            isAiGenerated = true
+        )
+    }
+
+    private val deepQuestionSchema = Schema.obj(
+        properties = mapOf(
+            "quickTipVi" to Schema.string(
+                description = "Actionable step-by-step IELTS shortcut / exam strategy in Vietnamese for this exact question type"
+            ),
+            "commonMistakesVi" to Schema.string(
+                description = "Concrete Band 6.0-6.5 mistakes candidates frequently make on this question in Vietnamese"
+            ),
+            "misconceptionTrapVi" to Schema.string(
+                description = "Exact examiner trap, distractor, or paraphrase twist in the passage/audio causing candidates to misread the question in Vietnamese"
+            )
+        )
+    )
+
+    private val deepQuestionModel by lazy {
+        Firebase.ai.generativeModel(
+            modelName = "gemini-3.5-flash-lite",
+            generationConfig = generationConfig {
+                temperature = 0.25f
+                maxOutputTokens = 850
+                responseMimeType = "application/json"
+                responseSchema = deepQuestionSchema
+            }
+        )
+    }
+
+    /**
+     * Powers "AI Chữa sâu câu này" inside Đề thi -> Chữa đề for any bundled or newly imported PDF/DOCX question.
+     */
+    suspend fun generateDeepQuestionAnalysis(
+        skillLabel: String,
+        questionTypeVi: String,
+        promptEn: String,
+        userAnswer: String,
+        correctAnswer: String,
+        passageExcerptEn: String = ""
+    ): com.example.data.DeepQuestionAnalysis = withContext(Dispatchers.IO) {
+        val contextBlock = if (passageExcerptEn.isNotBlank()) {
+            "\nPassage / Script Context: \"${passageExcerptEn.take(900)}\""
+        } else ""
+
+        val prompt = """
+            Role: Senior IELTS Band 9 Examiner coaching a Vietnamese learner (target Band 8.5).
+            Question Skill: $skillLabel | Type: $questionTypeVi
+            Question Prompt: "$promptEn"
+            Learner's Answer: "$userAnswer"
+            Official Correct Answer: "$correctAnswer"$contextBlock
+
+            Provide 3 concise, super practical, high-clarity diagnostic sections in Vietnamese:
+            1. quickTipVi: Step-by-step fast solving tip/trick (scanning anchor keywords, grammar prediction, or signposting cues) specifically for this question.
+            2. commonMistakesVi: Concrete Band 6.0-6.5 errors learners typically make here (e.g., confusing False vs Not Given, missing plural -s, exceeding word limit, misreading qualifier words).
+            3. misconceptionTrapVi: The exact examiner distractor trap or paraphrase twist that misleads candidates into choosing the wrong answer.
+        """.trimIndent()
+
+        val raw = GeminiResilientClient.generateJsonWithFallback(
+            primaryCall = { deepQuestionModel.generateContent(prompt).text },
+            prompt = prompt,
+            jsonSchemaHint = """
+                {
+                  "quickTipVi": "string (Vietnamese)",
+                  "commonMistakesVi": "string (Vietnamese)",
+                  "misconceptionTrapVi": "string (Vietnamese)"
+                }
+            """.trimIndent(),
+            temperature = 0.25f,
+            maxOutputTokens = 850,
+            timeoutMs = 50_000L,
+            operationLabelVi = "phân tích chuyên sâu câu hỏi IELTS"
+        )
+        val json = JSONObject(raw)
+        com.example.data.DeepQuestionAnalysis(
+            quickTipVi = json.optString("quickTipVi").trim()
+                .ifBlank { "Gạch chân từ khóa định vị (tên riêng, số liệu, động từ chính) rồi đối chiếu Paraphrase trực tiếp quanh đáp án \"$correctAnswer\"." },
+            commonMistakesVi = json.optString("commonMistakesVi").trim()
+                .ifBlank { "Dễ mất điểm do đọc lướt bỏ sót từ hạn định (only, mainly, rarely), sai dạng số ít/số nhiều hoặc nhầm lẫn giữa FALSE và NOT GIVEN." },
+            misconceptionTrapVi = json.optString("misconceptionTrapVi").trim()
+                .ifBlank { "Bẫy Distractor của giám khảo: câu gốc thường đảo chiều ngữ nghĩa hoặc dùng từ đồng nghĩa học thuật thay vì lặp lại từ khóa trong câu hỏi." },
+            isAiGenerated = true
+        )
     }
 }

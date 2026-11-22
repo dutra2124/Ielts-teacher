@@ -11,17 +11,21 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoFixHigh
+import androidx.compose.material.icons.rounded.Insights
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -48,15 +52,21 @@ import androidx.compose.ui.unit.dp
 import com.example.R
 import com.example.data.ExamBankCurriculum
 import com.example.data.PracticeSkill
+import com.example.data.ReviewErrorLogItem
 import com.example.data.ReviewReportFactory
 import com.example.speech.ApexTtsController
 import com.example.ui.ApexIeltsUiState
 import com.example.ui.components.AnimatedStreakFlame
+import com.example.ui.theme.CardBorderSoft
 import com.example.ui.theme.CardWhite
 import com.example.ui.theme.ElectricIndigo
+import com.example.ui.theme.ElectricIndigoLight
+import com.example.ui.theme.IndigoOnSurface
 import com.example.ui.theme.InkOnHero
 import com.example.ui.theme.InkOnHeroMuted
 import com.example.ui.theme.InkPrimary
+import com.example.ui.theme.InkSecondary
+import com.example.ui.theme.LocalAdaptiveLayoutInfo
 import com.example.ui.theme.LocalApexColors
 import com.example.ui.theme.PlusJakartaSansFontFamily
 import com.example.ui.theme.RoseDiff
@@ -70,33 +80,30 @@ private val ReviewHeroGradient = Brush.linearGradient(
 )
 
 /**
- * Tab 5: Sửa (Review & Fix) — Closes the full Lộ trình -> Học -> Luyện -> Thi -> Sửa loop:
- * 1. Diagnostic Band Report (count-up Overall Band, 4 skill scores, AI Teacher cheering/encouraging, accuracy bars)
- * 2. Original vs. Band 8.5+ Upgrade Diff View (Rose #E11D48 underlines vs Emerald #10B981 upgrades + Gemini AI rewrite)
- * 3. Error Log -> Action Loop ("Đưa từ sai vào SRS" -> Tab 2; "Luyện lại dạng bài yếu" -> Tab 3 pre-filtered)
+ * Embedded Exam Correction & Deep Diagnostic Toolkit ("Đề thi -> Chữa đề").
+ * Renders cleanly inside a parent vertically scrollable Column (no nested verticalScroll).
  */
 @Composable
-fun ReviewScreen(
+fun ReviewCorrectionContent(
     uiState: ApexIeltsUiState,
     onTeacherTap: () -> Unit,
     onGenerateAiDiff: (skillLabel: String, promptEn: String, originalText: String) -> Unit,
     onResetAiDiff: () -> Unit,
+    onGenerateDeepAnalysis: (ReviewErrorLogItem) -> Unit,
     onPushWordToSrs: (wordId: String) -> Unit,
     onPracticeWeakSkill: (skill: PracticeSkill, focusNoteVi: String) -> Unit,
-    onReturnToRoadmap: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    BackHandler { onReturnToRoadmap() }
-
     val context = LocalContext.current
+    val layoutInfo = LocalAdaptiveLayoutInfo.current
     val ttsController = remember(context) { ApexTtsController(context) { } }
     DisposableEffect(ttsController) {
         onDispose { ttsController.shutdown() }
     }
 
     val latestAttempt = uiState.examHistory.firstOrNull()
-    val allExams = remember(uiState.customExams) {
-        ExamBankCurriculum.authenticExams + uiState.customExams
+    val allExams = remember(uiState.authenticExams, uiState.customExams) {
+        uiState.authenticExams.ifEmpty { ExamBankCurriculum.authenticExams } + uiState.customExams
     }
 
     // Default to real submitted attempt if available; otherwise show rich pre-loaded sample report immediately
@@ -114,13 +121,177 @@ fun ReviewScreen(
 
     Column(
         modifier = modifier
+            .fillMaxWidth()
+            .testTag("review_correction_content"),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Source Report Switcher & Context Banner (Real Submitted Attempt vs Pre-loaded Sample Report)
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = CardWhite,
+            border = BorderStroke(1.dp, CardBorderSoft),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = layoutInfo.horizontalPadding)
+        ) {
+            Column(
+                modifier = Modifier.padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Surface(shape = RoundedCornerShape(10.dp), color = ElectricIndigoLight) {
+                        Icon(
+                            imageVector = Icons.Rounded.Insights,
+                            contentDescription = null,
+                            tint = IndigoOnSurface,
+                            modifier = Modifier
+                                .padding(7.dp)
+                                .size(18.dp)
+                        )
+                    }
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            text = "Bộ công cụ Chữa đề & Chẩn đoán Chuyên sâu",
+                            style = MaterialTheme.typography.titleSmall.copy(
+                                fontFamily = PlusJakartaSansFontFamily,
+                                fontWeight = FontWeight.Bold
+                            ),
+                            color = InkPrimary
+                        )
+                        Text(
+                            text = if (latestAttempt != null) {
+                                "Đã lưu ${uiState.examHistory.size} lượt nộp bài • Chọn nguồn báo cáo bên dưới"
+                            } else {
+                                "Đang hiển thị Báo cáo mẫu Band 7.0→8.5 (Hoàn thành bài Thi mô phỏng để chấm bài thật)"
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = InkSecondary
+                        )
+                    }
+                }
+
+                if (latestAttempt != null) {
+                    Surface(
+                        shape = RoundedCornerShape(50),
+                        color = SurfaceCanvas,
+                        border = BorderStroke(1.dp, CardBorderSoft),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            listOf(
+                                false to "Bài thi vừa nộp",
+                                true to "Báo cáo mẫu 7.0→8.5"
+                            ).forEach { (isSampleOption, label) ->
+                                val selected = preferSampleReport == isSampleOption
+                                val bg by animateColorAsState(
+                                    if (selected) ElectricIndigo else Color.Transparent,
+                                    tween(180),
+                                    label = "embedded_review_src_bg_$isSampleOption"
+                                )
+                                val fg by animateColorAsState(
+                                    if (selected) Color.White else InkSecondary,
+                                    tween(180),
+                                    label = "embedded_review_src_fg_$isSampleOption"
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(50))
+                                        .background(bg)
+                                        .clickable {
+                                            preferSampleReport = isSampleOption
+                                            onResetAiDiff()
+                                        }
+                                        .padding(horizontal = 8.dp, vertical = 8.dp)
+                                        .testTag("review_source_tab_$isSampleOption"),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = label,
+                                        style = MaterialTheme.typography.labelMedium.copy(
+                                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+                                        ),
+                                        color = fg,
+                                        maxLines = 1,
+                                        softWrap = false
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 1. Diagnostic Band Report + Animated AI Teacher + Question Type Accuracy Bars
+        ReviewDiagnosticCard(
+            report = activeReport,
+            isTeacherSpeaking = uiState.isTeacherSpeaking,
+            onTeacherTap = onTeacherTap,
+            onPracticeWeakSkill = onPracticeWeakSkill
+        )
+
+        // 2. Original vs. Band 8.5+ Upgrade Diff View
+        ReviewDiffViewCard(
+            writingDiff = activeReport.writingDiff,
+            speakingDiff = activeReport.speakingDiff,
+            aiDiffState = uiState.reviewDiffAiState,
+            ttsController = ttsController,
+            onGenerateAiDiff = onGenerateAiDiff,
+            onResetAiDiff = onResetAiDiff
+        )
+
+        // 3. Upgraded Error Log & Expandable 3-Section Deep Question Analysis Cards
+        ReviewErrorLogSection(
+            errors = activeReport.errorLog,
+            srsWordIds = uiState.srsWordIds,
+            deepQuestionAiResults = uiState.deepQuestionAiResults,
+            loadingQuestionAnalysisIds = uiState.loadingQuestionAnalysisIds,
+            questionAnalysisErrors = uiState.questionAnalysisErrors,
+            onGenerateDeepAnalysis = onGenerateDeepAnalysis,
+            onPushWordToSrs = onPushWordToSrs,
+            onPracticeWeakSkill = onPracticeWeakSkill
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+    }
+}
+
+/**
+ * Standalone wrapper preserved for compatibility if navigated directly.
+ */
+@Composable
+fun ReviewScreen(
+    uiState: ApexIeltsUiState,
+    onTeacherTap: () -> Unit,
+    onGenerateAiDiff: (skillLabel: String, promptEn: String, originalText: String) -> Unit,
+    onResetAiDiff: () -> Unit,
+    onGenerateDeepAnalysis: (ReviewErrorLogItem) -> Unit = {},
+    onPushWordToSrs: (wordId: String) -> Unit,
+    onPracticeWeakSkill: (skill: PracticeSkill, focusNoteVi: String) -> Unit,
+    onReturnToRoadmap: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    BackHandler { onReturnToRoadmap() }
+    val layoutInfo = LocalAdaptiveLayoutInfo.current
+
+    Column(
+        modifier = modifier
             .fillMaxSize()
             .background(SurfaceCanvas)
+            .imePadding()
             .verticalScroll(rememberScrollState())
             .testTag("review_screen"),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Vibrant Rose-Violet-Indigo Hero Header
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -138,7 +309,8 @@ fun ReviewScreen(
                     )
                 }
                 .statusBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
+                .displayCutoutPadding()
+                .padding(horizontal = layoutInfo.horizontalPadding, vertical = 14.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Row(
@@ -153,7 +325,8 @@ fun ReviewScreen(
                     Surface(
                         shape = RoundedCornerShape(50),
                         color = Color.White.copy(alpha = 0.20f),
-                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.30f))
+                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.30f)),
+                        modifier = Modifier.wrapContentWidth()
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -162,9 +335,11 @@ fun ReviewScreen(
                         ) {
                             Icon(Icons.Rounded.AutoFixHigh, contentDescription = null, tint = Color.White, modifier = Modifier.size(13.dp))
                             Text(
-                                text = "Bước 5 / 5 • Chữa lỗi & Nâng Band 8.5",
+                                text = "Chữa đề & Nâng Band 8.5",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = Color.White
+                                color = Color.White,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     }
@@ -193,90 +368,16 @@ fun ReviewScreen(
                     AnimatedStreakFlame(size = 34.dp)
                 }
             }
-
-            // Switcher between Latest Real Submitted Exam (if any) & Pre-loaded Sample Report
-            if (latestAttempt != null) {
-                Surface(
-                    shape = RoundedCornerShape(50),
-                    color = Color.White.copy(alpha = 0.18f),
-                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.28f)),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        listOf(
-                            false to "Bài thi vừa nộp",
-                            true to "Báo cáo mẫu 7.0→8.5"
-                        ).forEach { (isSampleOption, label) ->
-                            val selected = preferSampleReport == isSampleOption
-                            val bg by animateColorAsState(
-                                if (selected) CardWhite else Color.Transparent,
-                                tween(180),
-                                label = "review_src_bg_$isSampleOption"
-                            )
-                            val isDark = LocalApexColors.current.isDark
-                            val fg by animateColorAsState(
-                                if (selected) (if (isDark) InkPrimary else RoseDiff) else Color.White,
-                                tween(180),
-                                label = "review_src_fg_$isSampleOption"
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(50))
-                                    .background(bg)
-                                    .clickable {
-                                        preferSampleReport = isSampleOption
-                                        onResetAiDiff()
-                                    }
-                                    .padding(vertical = 8.dp)
-                                    .testTag("review_source_tab_$isSampleOption"),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = label,
-                                    style = MaterialTheme.typography.labelMedium.copy(
-                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
-                                    ),
-                                    color = fg
-                                )
-                            }
-                        }
-                    }
-                }
-            }
         }
 
-        // 1. Diagnostic Band Report + Animated AI Teacher + Question Type Accuracy Bars
-        ReviewDiagnosticCard(
-            report = activeReport,
-            isTeacherSpeaking = uiState.isTeacherSpeaking,
+        ReviewCorrectionContent(
+            uiState = uiState,
             onTeacherTap = onTeacherTap,
-            onPracticeWeakSkill = onPracticeWeakSkill
-        )
-
-        // 2. Original vs. Band 8.5+ Upgrade Diff View
-        ReviewDiffViewCard(
-            writingDiff = activeReport.writingDiff,
-            speakingDiff = activeReport.speakingDiff,
-            aiDiffState = uiState.reviewDiffAiState,
-            ttsController = ttsController,
             onGenerateAiDiff = onGenerateAiDiff,
-            onResetAiDiff = onResetAiDiff
-        )
-
-        // 3. Error Log -> Action Loop ("Nhật ký lỗi sai")
-        ReviewErrorLogSection(
-            errors = activeReport.errorLog,
-            srsWordIds = uiState.srsWordIds,
+            onResetAiDiff = onResetAiDiff,
+            onGenerateDeepAnalysis = onGenerateDeepAnalysis,
             onPushWordToSrs = onPushWordToSrs,
             onPracticeWeakSkill = onPracticeWeakSkill
         )
-
-        Spacer(modifier = Modifier.height(24.dp))
     }
 }

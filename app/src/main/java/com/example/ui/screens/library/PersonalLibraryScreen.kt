@@ -12,16 +12,21 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -93,6 +98,7 @@ import com.example.ui.theme.InkOnHero
 import com.example.ui.theme.InkOnHeroMuted
 import com.example.ui.theme.InkPrimary
 import com.example.ui.theme.InkSecondary
+import com.example.ui.theme.LocalAdaptiveLayoutInfo
 import com.example.ui.theme.PlusJakartaSansFontFamily
 import com.example.ui.theme.PracticeTeal
 import com.example.ui.theme.PracticeTealLight
@@ -106,7 +112,7 @@ private val LibraryHeroGradient = Brush.linearGradient(
 )
 
 /**
- * Dedicated "Tài liệu cá nhân & Tự học" (Personal Library / Self-Study Hub) optimized for 20:9 portrait Android layout.
+ * Dedicated "Tài liệu cá nhân & Tự học" (Personal Library / Self-Study Hub) with adaptive multi-column grid.
  * Opens as a full-screen overlay without adding a 6th tab to the Bottom Navigation Bar.
  */
 @Composable
@@ -126,6 +132,8 @@ fun PersonalLibraryScreen(
     modifier: Modifier = Modifier
 ) {
     BackHandler { onClose() }
+    val layoutInfo = LocalAdaptiveLayoutInfo.current
+    val hPad = layoutInfo.horizontalPadding
 
     var selectedCategory by rememberSaveable { mutableStateOf(LibraryCategoryFilter.ALL) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
@@ -195,22 +203,26 @@ fun PersonalLibraryScreen(
             .background(SurfaceCanvas)
             .testTag("personal_library_screen")
     ) {
-        LazyColumn(
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(minSize = layoutInfo.adaptiveCardMinWidth),
             modifier = Modifier
                 .fillMaxSize()
-                .navigationBarsPadding(),
+                .navigationBarsPadding()
+                .imePadding(),
             contentPadding = PaddingValues(bottom = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // 1. Vibrant Hero Top Bar + Quick Actions
-            item(key = "library_hero_header") {
+            item(key = "library_hero_header", span = { GridItemSpan(maxLineSpan) }) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp))
                         .background(LibraryHeroGradient)
                         .statusBarsPadding()
-                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                        .displayCutoutPadding()
+                        .padding(horizontal = hPad, vertical = 14.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Row(
@@ -267,7 +279,8 @@ fun PersonalLibraryScreen(
                         Surface(
                             shape = RoundedCornerShape(50),
                             color = Color.White.copy(alpha = 0.22f),
-                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.34f))
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.34f)),
+                            modifier = Modifier.wrapContentWidth()
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
@@ -283,7 +296,9 @@ fun PersonalLibraryScreen(
                                 Text(
                                     text = "${uiState.dailySelfStudyMinutes}p",
                                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                    color = Color.White
+                                    color = Color.White,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                         }
@@ -319,7 +334,9 @@ fun PersonalLibraryScreen(
                                     text = "Nhập CSV / JSON",
                                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                                     color = ElectricIndigo,
-                                    maxLines = 1
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
@@ -350,7 +367,9 @@ fun PersonalLibraryScreen(
                                     text = "Tạo tài liệu mới",
                                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                                     color = Color.White,
-                                    maxLines = 1
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
@@ -359,11 +378,11 @@ fun PersonalLibraryScreen(
             }
 
             // 2. Instant Search Bar + Category Filter Pills + Tag Chips
-            item(key = "library_search_and_filters") {
+            item(key = "library_search_and_filters", span = { GridItemSpan(maxLineSpan) }) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
+                        .padding(horizontal = hPad),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     OutlinedTextField(
@@ -483,7 +502,7 @@ fun PersonalLibraryScreen(
                 )
             ) {
                 if (filteredMaterials.isEmpty()) {
-                    item(key = "empty_materials_card") {
+                    item(key = "empty_materials_card", span = { GridItemSpan(maxLineSpan) }) {
                         EmptyLibraryPlaceholder(
                             title = "Chưa có tài liệu nào khớp bộ lọc",
                             subtitle = "Tạo bài đọc/ghi chú tự học mới hoặc nhập hàng loạt từ tệp CSV / JSON.",
@@ -502,7 +521,7 @@ fun PersonalLibraryScreen(
                             onOpen = { openedMaterialId = material.id },
                             onEdit = { editingMaterial = material },
                             onDelete = { onDeleteMaterial(material.id) },
-                            modifier = Modifier.padding(horizontal = 16.dp)
+                            modifier = Modifier.padding(horizontal = hPad)
                         )
                     }
                 }
@@ -510,14 +529,14 @@ fun PersonalLibraryScreen(
 
             // 3B. Bộ Flashcard Tab (Grouped by Module from Room SQLite)
             if (selectedCategory == LibraryCategoryFilter.FLASHCARDS) {
-                item(key = "flashcard_import_banner") {
+                item(key = "flashcard_import_banner", span = { GridItemSpan(maxLineSpan) }) {
                     Surface(
                         shape = RoundedCornerShape(18.dp),
                         color = ElectricIndigoLight.copy(alpha = 0.72f),
                         border = BorderStroke(1.dp, ElectricIndigo.copy(alpha = 0.28f)),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp)
+                            .padding(horizontal = hPad)
                     ) {
                         Row(
                             modifier = Modifier.padding(14.dp),
@@ -539,9 +558,10 @@ fun PersonalLibraryScreen(
                             Spacer(modifier = Modifier.width(8.dp))
                             OutlinedButton(
                                 onClick = { onOpenBulkImporter(BulkImportDataset.VOCABULARY) },
-                                shape = RoundedCornerShape(12.dp)
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.wrapContentWidth()
                             ) {
-                                Text("Nhập CSV")
+                                Text("Nhập CSV", maxLines = 1, softWrap = false)
                             }
                         }
                     }
@@ -554,7 +574,7 @@ fun PersonalLibraryScreen(
                         border = BorderStroke(1.dp, CardBorderSoft),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp)
+                            .padding(horizontal = hPad)
                     ) {
                         Column(
                             modifier = Modifier.padding(14.dp),
@@ -636,7 +656,7 @@ fun PersonalLibraryScreen(
             // 3C. Đề cá nhân Tab (Custom & Imported Exams)
             if (selectedCategory == LibraryCategoryFilter.EXAMS) {
                 if (filteredPersonalExams.isEmpty()) {
-                    item(key = "empty_personal_exams") {
+                    item(key = "empty_personal_exams", span = { GridItemSpan(maxLineSpan) }) {
                         EmptyLibraryPlaceholder(
                             title = "Chưa có Đề thi cá nhân nào",
                             subtitle = "Nhập nhanh bộ đề IELTS bằng file CSV / JSON hoặc dùng AI Exam Parser tại Tab 4 Thi.",
@@ -654,7 +674,7 @@ fun PersonalLibraryScreen(
                             border = BorderStroke(1.dp, CardBorderSoft),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 16.dp)
+                                .padding(horizontal = hPad)
                         ) {
                             Column(
                                 modifier = Modifier.padding(14.dp),

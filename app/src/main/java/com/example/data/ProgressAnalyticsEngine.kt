@@ -224,7 +224,7 @@ object ProgressAnalyticsEngine {
                     else -> 1
                 }
             } else {
-                val withinStreak = daysAgo < state.streakDays.coerceAtLeast(1)
+                val withinStreak = state.streakDays > 0 && daysAgo < state.streakDays
                 val seed = ((cellIdx * 7 + state.activeModuleId * 3 + logCountBonus) % 10)
                 minutes = when {
                     withinStreak -> 22 + (seed * 3) + examCountBonus * 2
@@ -425,14 +425,14 @@ object ProgressAnalyticsEngine {
                 id = "q_praise_primary",
                 badgeVi = if (isHighDiligence) "Khen ngợi sự chăm chỉ" else "Tiếp lửa hôm nay",
                 textVi = if (isHighDiligence) {
-                    "Chào bạn! Cô rất tự hào về sự chăm chỉ của bạn. Chỉ số chuyên cần đã đạt $diligenceScore phần trăm với chuỗi $streak ngày liên tiếp và $weeklyMinutes phút học trong tuần này. Hôm nay mình dành thêm 10 phút cải thiện ${weakArea.weakAreaTitleVi} để chạm mốc Band 8.5 sớm hơn nhé!"
+                    "Chào bạn quay lại Master Ielts! Cô rất tự hào về sự chăm chỉ của bạn. Chỉ số chuyên cần đã đạt $diligenceScore phần trăm với chuỗi $streak ngày liên tiếp và $weeklyMinutes phút học trong tuần này. Hôm nay mình dành thêm 10 phút cải thiện ${weakArea.weakAreaTitleVi} để chạm mốc Band 8.5 sớm hơn nhé!"
                 } else {
-                    "Chào bạn thân mến! Đừng lo lắng nếu tuần này bạn hơi bận rộn. Chỉ cần 10 phút mỗi ngày cũng đủ giữ ngọn lửa IELTS luôn sáng. Hôm nay cô đồng hành cùng bạn ôn nhẹ phần ${weakArea.weakAreaTitleVi} — bắt đầu từng bước nhỏ là chiến thắng lớn nhất rồi!"
+                    "Chào mừng bạn đến với Master Ielts! Đừng lo lắng nếu tuần này bạn hơi bận rộn. Chỉ cần 10 phút mỗi ngày cũng đủ giữ ngọn lửa IELTS luôn sáng. Hôm nay cô đồng hành cùng bạn ôn nhẹ phần ${weakArea.weakAreaTitleVi} — bắt đầu từng bước nhỏ là chiến thắng lớn nhất rồi!"
                 },
                 textEn = if (isHighDiligence) {
-                    "Well done! I am genuinely proud of your consistency. Your diligence index has reached $diligenceScore percent with a $streak day study streak and $weeklyMinutes minutes logged this week. Let us spend ten focused minutes strengthening your ${weakArea.weakSkill.labelEn} skills to move closer to Band 8.5!"
+                    "Welcome back to Master Ielts! I am genuinely proud of your consistency. Your diligence index has reached $diligenceScore percent with a $streak day study streak and $weeklyMinutes minutes logged this week. Let us spend ten focused minutes strengthening your ${weakArea.weakSkill.labelEn} skills to move closer to Band 8.5!"
                 } else {
-                    "Welcome back! Even ten focused minutes today will rebuild your momentum. Every Band 8.5 scorer succeeds through small, steady habits. Let us practice one short ${weakArea.weakSkill.labelEn} exercise together right now!"
+                    "Welcome to Master Ielts! Even ten focused minutes today will rebuild your momentum. Every Band 8.5 scorer succeeds through small, steady habits. Let us practice one short ${weakArea.weakSkill.labelEn} exercise together right now!"
                 }
             ),
             CoachVoiceQuote(

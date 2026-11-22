@@ -136,7 +136,7 @@ object ExamSerialization {
 
     val SAMPLE_JSON_TEMPLATE: String = """
         {
-          "title": "ApexIELTS Custom Test — Urban Mobility & AI",
+          "title": "Master Ielts Custom Test — Urban Mobility & AI",
           "sourceLabel": "Đề cá nhân JSON",
           "year": 2025,
           "topicVi": "Giao thông đô thị & Trí tuệ nhân tạo",

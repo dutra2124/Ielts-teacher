@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -26,6 +27,7 @@ import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.NotificationsOff
+import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -59,6 +61,7 @@ import com.example.R
 import com.example.data.DailyHabitTask
 import com.example.data.DefaultHabitData
 import com.example.data.NotificationPreferences
+import com.example.data.StreakStatus
 import com.example.data.WeekdayItem
 import com.example.ui.theme.CardBorderSoft
 import com.example.ui.theme.CardSurfaceTinted
@@ -68,11 +71,16 @@ import com.example.ui.theme.ElectricIndigo
 import com.example.ui.theme.ElectricIndigoLight
 import com.example.ui.theme.EmeraldSuccess
 import com.example.ui.theme.EmeraldSuccessLight
+import com.example.ui.theme.GoldMastery
+import com.example.ui.theme.GoldMasteryLight
+import com.example.ui.theme.GoldOnContainer
 import com.example.ui.theme.IndigoOnSurface
 import com.example.ui.theme.InkMuted
 import com.example.ui.theme.InkPrimary
 import com.example.ui.theme.InkSecondary
 import com.example.ui.theme.PlusJakartaSansFontFamily
+import com.example.ui.theme.RoseAlert
+import com.example.ui.theme.RoseDiffLight
 import com.example.ui.theme.StreakBg
 import com.example.ui.theme.StreakOrange
 import com.example.ui.theme.SurfaceCanvas
@@ -95,6 +103,8 @@ fun DailyStudyTrackerCard(
     notificationPrefs: NotificationPreferences,
     onToggleHabit: (String) -> Unit,
     onOpenNotificationSheet: () -> Unit,
+    streakStatus: StreakStatus = StreakStatus(currentStreak = streakDays),
+    onOpenStreakSheet: () -> Unit = {},
     dailySelfStudyMinutes: Int = 0,
     modifier: Modifier = Modifier
 ) {
@@ -159,25 +169,88 @@ fun DailyStudyTrackerCard(
 
                 Spacer(modifier = Modifier.width(8.dp))
 
+                val streakAccent = streakStatus.masteryLevel.accentFor(streakStatus.visualStyle)
+                val streakPillBg = if (streakStatus.currentStreak == 0) {
+                    SurfaceCanvas
+                } else {
+                    streakStatus.masteryLevel.containerBg
+                }
                 Surface(
                     shape = RoundedCornerShape(50),
-                    color = StreakBg,
-                    border = BorderStroke(1.dp, StreakOrange.copy(alpha = 0.30f)),
-                    modifier = Modifier.testTag("tracker_streak_pill")
+                    color = streakPillBg,
+                    border = BorderStroke(1.dp, streakAccent.copy(alpha = 0.35f)),
+                    modifier = Modifier
+                        .wrapContentWidth()
+                        .clip(RoundedCornerShape(50))
+                        .clickable(onClick = onOpenStreakSheet)
+                        .testTag("tracker_streak_pill")
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                     ) {
-                        AnimatedStreakFlame(size = 18.dp)
+                        MasteryStreakIcon(
+                            streakDays = streakStatus.currentStreak,
+                            style = streakStatus.visualStyle,
+                            size = 30.dp,
+                            contentDescriptionText = "Chuỗi học liên tiếp • Nhấn để xem chi tiết"
+                        )
                         Text(
-                            text = stringResource(R.string.streak_days_label, streakDays),
+                            text = stringResource(R.string.streak_days_label, streakStatus.currentStreak),
                             style = MaterialTheme.typography.labelMedium.copy(
                                 fontFamily = PlusJakartaSansFontFamily,
                                 fontWeight = FontWeight.Bold
                             ),
-                            color = StreakOrange
+                            color = streakAccent,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    }
+                }
+            }
+
+            // 3-Day Inactivity Grace Window Warning Banner (shown when 1-2 days missed)
+            val graceWarning = streakStatus.graceWarningVi
+            if (graceWarning != null) {
+                val isUrgent = streakStatus.daysRemainingBeforeLoss <= 1
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = if (isUrgent) RoseDiffLight else GoldMasteryLight,
+                    border = BorderStroke(
+                        1.dp,
+                        if (isUrgent) RoseAlert.copy(alpha = 0.45f) else GoldMastery.copy(alpha = 0.45f)
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .clickable(onClick = onOpenStreakSheet)
+                        .testTag("tracker_streak_grace_warning")
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.WarningAmber,
+                            contentDescription = "Cảnh báo giữ chuỗi học",
+                            tint = if (isUrgent) RoseAlert else GoldOnContainer,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = graceWarning,
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                            color = if (isUrgent) RoseAlert else GoldOnContainer,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                            contentDescription = null,
+                            tint = if (isUrgent) RoseAlert else GoldOnContainer,
+                            modifier = Modifier.size(16.dp)
                         )
                     }
                 }
@@ -292,16 +365,26 @@ fun DailyStudyTrackerCard(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.weight(1f)
                     ) {
-                        Icon(
-                            imageVector = if (notificationPrefs.masterEnabled) {
-                                Icons.Rounded.NotificationsActive
-                            } else {
-                                Icons.Rounded.NotificationsOff
-                            },
-                            contentDescription = null,
-                            tint = if (notificationPrefs.masterEnabled) ElectricIndigo else InkMuted,
-                            modifier = Modifier.size(18.dp)
-                        )
+                        Box(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(RoundedCornerShape(11.dp))
+                                .background(
+                                    if (notificationPrefs.masterEnabled) ElectricIndigoLight else CardWhite
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = if (notificationPrefs.masterEnabled) {
+                                    Icons.Rounded.NotificationsActive
+                                } else {
+                                    Icons.Rounded.NotificationsOff
+                                },
+                                contentDescription = null,
+                                tint = if (notificationPrefs.masterEnabled) ElectricIndigo else InkMuted,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
                         val summaryText = if (notificationPrefs.masterEnabled && nextSlot != null) {
                             "${stringResource(R.string.next_reminder_prefix)} ${nextSlot.formattedTime()} • $activeCount khung giờ"
                         } else {

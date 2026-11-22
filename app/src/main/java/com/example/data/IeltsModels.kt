@@ -35,8 +35,15 @@ enum class StudyTab(
     ROADMAP(0, "Lộ trình", "Roadmap", "roadmap"),
     LEARN(1, "Học", "Learn", "learn"),
     PRACTICE(2, "Luyện", "Practice", "practice"),
-    EXAM(3, "Thi", "Exam", "exam"),
-    REVIEW(4, "Sửa", "Review", "review")
+    EXAM(3, "Đề thi", "Exams", "exam")
+}
+
+enum class ExamHubSubTab(
+    val index: Int,
+    val labelVi: String
+) {
+    SIMULATION(0, "Thi mô phỏng"),
+    CORRECTION(1, "Chữa đề")
 }
 
 enum class TeacherMood(val labelVi: String) {

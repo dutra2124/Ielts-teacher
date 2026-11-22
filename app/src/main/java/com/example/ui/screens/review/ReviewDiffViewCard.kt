@@ -3,7 +3,10 @@ package com.example.ui.screens.review
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
@@ -63,6 +67,7 @@ import com.example.ui.theme.IndigoOnSurface
 import com.example.ui.theme.InkMuted
 import com.example.ui.theme.InkPrimary
 import com.example.ui.theme.InkSecondary
+import com.example.ui.theme.LocalAdaptiveLayoutInfo
 import com.example.ui.theme.PlusJakartaSansFontFamily
 import com.example.ui.theme.RoseAlert
 import com.example.ui.theme.RoseDiff
@@ -70,12 +75,13 @@ import com.example.ui.theme.RoseDiffLight
 import com.example.ui.theme.SurfaceCanvas
 
 /**
- * 20:9 Vertical-Friendly Original vs. Band 8.5+ Upgrade Diff View:
- * - Supports Writing & Speaking submissions
- * - Toggle between Stacked view (Trên/Dưới) and Tabbed Quick-Flip view (Gốc / Band 8.5+)
+ * Adaptive Original vs. Band 8.5+ Upgrade Diff View:
+ * - Compact phones: Stacked (Trên/Dưới) or Tabbed Quick-Flip view (Gốc / Band 8.5+)
+ * - Tablets / Landscape (>= 600dp): Side-by-side Left/Right Diff Comparison
  * - Original weak phrases underlined in Rose (#E11D48); Band 8.5+ upgrades highlighted in Emerald (#10B981)
  * - Tap any change item to read detailed Vietnamese examiner explanation + on-demand Gemini AI rewrite
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ReviewDiffViewCard(
     writingDiff: UpgradeDiffComparison,
@@ -106,13 +112,15 @@ fun ReviewDiffViewCard(
         mutableStateOf(displayedComparison.changes.firstOrNull()?.id)
     }
 
+    val layoutInfo = LocalAdaptiveLayoutInfo.current
+
     Surface(
         shape = RoundedCornerShape(24.dp),
         color = CardWhite,
         border = BorderStroke(1.dp, CardBorderSoft),
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp)
+            .padding(horizontal = layoutInfo.horizontalPadding)
             .testTag("review_diff_view_card")
     ) {
         Column(
@@ -141,11 +149,11 @@ fun ReviewDiffViewCard(
                 }
             }
 
-            // Writing vs Speaking Switcher + Stacked/Tabbed Layout Toggle
-            Row(
+            // Writing vs Speaking Switcher + Stacked/Tabbed Layout Toggle (FlowRow for large font safety)
+            FlowRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     listOf("Writing", "Speaking").forEachIndexed { idx, label ->
@@ -155,6 +163,7 @@ fun ReviewDiffViewCard(
                             color = if (active) ElectricIndigo else SurfaceCanvas,
                             border = BorderStroke(1.dp, if (active) ElectricIndigo else CardBorderSoft),
                             modifier = Modifier
+                                .wrapContentWidth()
                                 .clip(RoundedCornerShape(50))
                                 .clickable {
                                     selectedSkillTab = idx
@@ -166,6 +175,8 @@ fun ReviewDiffViewCard(
                                 text = label,
                                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                                 color = if (active) Color.White else InkSecondary,
+                                maxLines = 1,
+                                softWrap = false,
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                             )
                         }
@@ -177,14 +188,21 @@ fun ReviewDiffViewCard(
                     color = SurfaceCanvas,
                     border = BorderStroke(1.dp, CardBorderSoft),
                     modifier = Modifier
+                        .wrapContentWidth()
                         .clip(RoundedCornerShape(50))
                         .clickable { isStackedMode = !isStackedMode }
                         .testTag("review_diff_layout_toggle")
                 ) {
                     Text(
-                        text = if (isStackedMode) "Dạng xếp chồng" else "Dạng chuyển thẻ",
+                        text = if (isStackedMode) {
+                            if (layoutInfo.useSideBySideSplit) "So sánh 2 cột" else "Dạng xếp chồng"
+                        } else {
+                            "Dạng chuyển thẻ"
+                        },
                         style = MaterialTheme.typography.labelSmall,
                         color = ElectricIndigo,
+                        maxLines = 1,
+                        softWrap = false,
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                     )
                 }
@@ -237,8 +255,7 @@ fun ReviewDiffViewCard(
                 }
             }
 
-            // Original Response Box (Weak phrases underlined in Rose #E11D48)
-            if (isStackedMode || activeSinglePane == 0) {
+            val originalBox: @Composable () -> Unit = {
                 Surface(
                     shape = RoundedCornerShape(18.dp),
                     color = RoseDiffLight.copy(alpha = 0.35f),
@@ -272,8 +289,7 @@ fun ReviewDiffViewCard(
                 }
             }
 
-            // Band 8.5+ Upgraded Version Box (Upgrades highlighted in Emerald #10B981)
-            if (isStackedMode || activeSinglePane == 1) {
+            val upgradedBox: @Composable () -> Unit = {
                 Surface(
                     shape = RoundedCornerShape(18.dp),
                     color = EmeraldSuccessLight.copy(alpha = 0.38f),
@@ -301,6 +317,7 @@ fun ReviewDiffViewCard(
                                 shape = RoundedCornerShape(50),
                                 color = CardWhite,
                                 modifier = Modifier
+                                    .wrapContentWidth()
                                     .clip(RoundedCornerShape(50))
                                     .clickable {
                                         ttsController.speak(displayedComparison.upgradedText, EnglishAccent.UK)
@@ -312,7 +329,7 @@ fun ReviewDiffViewCard(
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                 ) {
                                     Icon(Icons.AutoMirrored.Rounded.VolumeUp, contentDescription = "Nghe bản Band 8.5+", tint = EmeraldOnContainer, modifier = Modifier.size(14.dp))
-                                    Text("Nghe UK", style = MaterialTheme.typography.labelSmall, color = EmeraldOnContainer)
+                                    Text("Nghe UK", style = MaterialTheme.typography.labelSmall, color = EmeraldOnContainer, maxLines = 1, softWrap = false)
                                 }
                             }
                         }
@@ -330,6 +347,24 @@ fun ReviewDiffViewCard(
                             color = InkPrimary
                         )
                     }
+                }
+            }
+
+            if (isStackedMode && layoutInfo.useSideBySideSplit) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Box(modifier = Modifier.weight(1f)) { originalBox() }
+                    Box(modifier = Modifier.weight(1f)) { upgradedBox() }
+                }
+            } else {
+                if (isStackedMode || activeSinglePane == 0) {
+                    originalBox()
+                }
+                if (isStackedMode || activeSinglePane == 1) {
+                    upgradedBox()
                 }
             }
 
