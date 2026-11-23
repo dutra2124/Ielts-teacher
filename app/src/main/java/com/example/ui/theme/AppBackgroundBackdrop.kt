@@ -26,6 +26,8 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
+import android.os.Build
+import androidx.compose.ui.draw.blur
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -95,6 +97,7 @@ object WallpaperStorageHelper {
  * - Base SurfaceCanvas color
  * - Either the user's custom gallery wallpaper OR one of the 4 built-in subtle wallpaper patterns
  * - Adjustable dim / scrim overlay (0% - 85%) to guarantee foreground legibility
+ * - Optional soft blur (Android 12+) & frosted depth veil when Selective Glassmorphism is enabled
  */
 @Composable
 fun AppBackgroundBackdrop(
@@ -112,25 +115,38 @@ fun AppBackgroundBackdrop(
     }
 
     val overlayAlpha = themePrefs.backgroundOverlayOpacity.coerceIn(0f, 0.85f)
+    val glassActive = themePrefs.glassmorphismEnabled && !palette.isHighContrast
+    val blurModifier = if (glassActive && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        Modifier.blur(radius = 12.dp)
+    } else {
+        Modifier
+    }
 
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(palette.surfaceCanvas)
     ) {
-        // Layer 1: Custom Gallery Photo OR Built-in Procedural Pattern
+        // Layer 1: Custom Gallery Photo OR Built-in Procedural Pattern (or soft glass aura)
         if (galleryBitmap != null) {
             Image(
                 bitmap = galleryBitmap!!,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(blurModifier)
             )
             // Adaptive Dim/Overlay Scrim (0% - 85%) for crisp foreground readability
+            val effectiveScrim = if (glassActive) {
+                (overlayAlpha * 0.82f).coerceIn(0.14f, 0.78f)
+            } else {
+                overlayAlpha
+            }
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(palette.surfaceCanvas.copy(alpha = overlayAlpha))
+                    .background(palette.surfaceCanvas.copy(alpha = effectiveScrim))
             )
         } else if (themePrefs.wallpaperPattern != AppWallpaperPattern.NONE) {
             WallpaperPatternCanvas(
@@ -140,8 +156,39 @@ fun AppBackgroundBackdrop(
                 surface = palette.surfaceCanvas,
                 isDark = palette.isDark,
                 strength = (1f - overlayAlpha * 0.72f).coerceIn(0.25f, 1f),
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(blurModifier)
             )
+        } else if (glassActive) {
+            // Subtle luminous ambient orbs behind glass cards when no wallpaper is chosen
+            Canvas(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(blurModifier)
+            ) {
+                val w = size.width
+                val h = size.height
+                val orbAlpha = if (palette.isDark) 0.22f else 0.14f
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(palette.primaryAccent.copy(alpha = orbAlpha), Color.Transparent),
+                        center = Offset(w * 0.14f, h * 0.14f),
+                        radius = w * 0.72f
+                    ),
+                    radius = w * 0.72f,
+                    center = Offset(w * 0.14f, h * 0.14f)
+                )
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(palette.secondaryAccent.copy(alpha = orbAlpha * 0.9f), Color.Transparent),
+                        center = Offset(w * 0.88f, h * 0.45f),
+                        radius = w * 0.68f
+                    ),
+                    radius = w * 0.68f,
+                    center = Offset(w * 0.88f, h * 0.45f)
+                )
+            }
         }
 
         // Layer 2: App Foreground Content

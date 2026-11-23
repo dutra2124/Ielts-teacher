@@ -123,110 +123,85 @@ fun ReviewCorrectionContent(
         modifier = modifier
             .fillMaxWidth()
             .testTag("review_correction_content"),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Source Report Switcher & Context Banner (Real Submitted Attempt vs Pre-loaded Sample Report)
-        Surface(
-            shape = RoundedCornerShape(20.dp),
-            color = CardWhite,
-            border = BorderStroke(1.dp, CardBorderSoft),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = layoutInfo.horizontalPadding)
-        ) {
-            Column(
-                modifier = Modifier.padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+        // Compact Source Switcher (Real Submitted Attempt vs Pre-loaded Sample Report)
+        if (latestAttempt != null) {
+            Surface(
+                shape = RoundedCornerShape(50),
+                color = CardWhite,
+                border = BorderStroke(1.dp, CardBorderSoft),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = layoutInfo.horizontalPadding)
             ) {
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Surface(shape = RoundedCornerShape(10.dp), color = ElectricIndigoLight) {
-                        Icon(
-                            imageVector = Icons.Rounded.Insights,
-                            contentDescription = null,
-                            tint = IndigoOnSurface,
+                    listOf(
+                        false to "Bài vừa nộp (${uiState.examHistory.size})",
+                        true to "Báo cáo mẫu 7.0→8.5"
+                    ).forEach { (isSampleOption, label) ->
+                        val selected = preferSampleReport == isSampleOption
+                        val bg by animateColorAsState(
+                            if (selected) ElectricIndigo else Color.Transparent,
+                            tween(180),
+                            label = "embedded_review_src_bg_$isSampleOption"
+                        )
+                        val fg by animateColorAsState(
+                            if (selected) Color.White else InkSecondary,
+                            tween(180),
+                            label = "embedded_review_src_fg_$isSampleOption"
+                        )
+                        Box(
                             modifier = Modifier
-                                .padding(7.dp)
-                                .size(18.dp)
-                        )
-                    }
-                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(
-                            text = "Bộ công cụ Chữa đề & Chẩn đoán Chuyên sâu",
-                            style = MaterialTheme.typography.titleSmall.copy(
-                                fontFamily = PlusJakartaSansFontFamily,
-                                fontWeight = FontWeight.Bold
-                            ),
-                            color = InkPrimary
-                        )
-                        Text(
-                            text = if (latestAttempt != null) {
-                                "Đã lưu ${uiState.examHistory.size} lượt nộp bài • Chọn nguồn báo cáo bên dưới"
-                            } else {
-                                "Đang hiển thị Báo cáo mẫu Band 7.0→8.5 (Hoàn thành bài Thi mô phỏng để chấm bài thật)"
-                            },
-                            style = MaterialTheme.typography.labelSmall,
-                            color = InkSecondary
-                        )
-                    }
-                }
-
-                if (latestAttempt != null) {
-                    Surface(
-                        shape = RoundedCornerShape(50),
-                        color = SurfaceCanvas,
-                        border = BorderStroke(1.dp, CardBorderSoft),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(4.dp),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            listOf(
-                                false to "Bài thi vừa nộp",
-                                true to "Báo cáo mẫu 7.0→8.5"
-                            ).forEach { (isSampleOption, label) ->
-                                val selected = preferSampleReport == isSampleOption
-                                val bg by animateColorAsState(
-                                    if (selected) ElectricIndigo else Color.Transparent,
-                                    tween(180),
-                                    label = "embedded_review_src_bg_$isSampleOption"
-                                )
-                                val fg by animateColorAsState(
-                                    if (selected) Color.White else InkSecondary,
-                                    tween(180),
-                                    label = "embedded_review_src_fg_$isSampleOption"
-                                )
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clip(RoundedCornerShape(50))
-                                        .background(bg)
-                                        .clickable {
-                                            preferSampleReport = isSampleOption
-                                            onResetAiDiff()
-                                        }
-                                        .padding(horizontal = 8.dp, vertical = 8.dp)
-                                        .testTag("review_source_tab_$isSampleOption"),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = label,
-                                        style = MaterialTheme.typography.labelMedium.copy(
-                                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
-                                        ),
-                                        color = fg,
-                                        maxLines = 1,
-                                        softWrap = false
-                                    )
+                                .weight(1f)
+                                .clip(RoundedCornerShape(50))
+                                .background(bg)
+                                .clickable {
+                                    preferSampleReport = isSampleOption
+                                    onResetAiDiff()
                                 }
-                            }
+                                .padding(horizontal = 8.dp, vertical = 7.dp)
+                                .testTag("review_source_tab_$isSampleOption"),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+                                ),
+                                color = fg,
+                                maxLines = 1,
+                                softWrap = false
+                            )
                         }
                     }
+                }
+            }
+        } else {
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = ElectricIndigoLight.copy(alpha = 0.65f),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = layoutInfo.horizontalPadding)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(7.dp)
+                ) {
+                    Icon(Icons.Rounded.Insights, contentDescription = null, tint = IndigoOnSurface, modifier = Modifier.size(16.dp))
+                    Text(
+                        text = "Báo cáo mẫu 7.0→8.5 • Nộp bài thi để chấm thật",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = IndigoOnSurface,
+                        maxLines = 1
+                    )
                 }
             }
         }

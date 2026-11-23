@@ -41,15 +41,19 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -58,11 +62,15 @@ import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.ai.WritingAiEvaluation
 import com.example.ai.WritingAiUiState
+import com.example.data.SavedWritingDraft
 import com.example.data.TeacherMood
 import com.example.data.WritingDataPoint
+import com.example.data.WritingDraftStore
 import com.example.data.WritingPracticePack
 import com.example.data.WritingTaskType
 import com.example.ui.components.AnimatedTeacher
+import com.example.ui.components.WritingCriteriaChecklistCard
+import com.example.ui.components.WritingWordCountAndDraftBar
 import com.example.ui.theme.CardBorderSoft
 import com.example.ui.theme.CardWhite
 import com.example.ui.theme.CyanGlow
@@ -81,6 +89,7 @@ import com.example.ui.theme.PracticeTealSurface
 import com.example.ui.theme.RoseAlert
 import com.example.ui.theme.SurfaceCanvas
 import com.example.ui.theme.TealOnSurface
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -93,12 +102,61 @@ fun PracticeWritingView(
     onResetAi: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val layoutInfo = LocalAdaptiveLayoutInfo.current
     var selectedTask by remember(pack.moduleId) { mutableStateOf(WritingTaskType.TASK_2) }
     var showOutline by remember(pack.moduleId) { mutableStateOf(true) }
 
     val activePrompt = remember(pack, selectedTask) {
         pack.prompts.firstOrNull { it.taskType == selectedTask } ?: pack.prompts.first()
+    }
+
+    // Automatic local draft protection (restore on entry + auto-save every 5s + save on accidental exit)
+    val draftKey = remember(pack.moduleId, selectedTask) {
+        WritingDraftStore.practiceKey(pack.moduleId, selectedTask)
+    }
+    var lastSavedTimeLabel by remember(draftKey) { mutableStateOf<String?>(null) }
+    var restoredFromDraft by remember(draftKey) { mutableStateOf(false) }
+    val latestDraftState = rememberUpdatedState(essayDraft)
+
+    LaunchedEffect(draftKey) {
+        val saved = WritingDraftStore.loadDraft(context, draftKey)
+        if (saved != null && saved.text.isNotBlank()) {
+            if (latestDraftState.value != saved.text) {
+                onEssayDraftChange(saved.text)
+            }
+            lastSavedTimeLabel = saved.formattedTime()
+            restoredFromDraft = true
+        } else {
+            lastSavedTimeLabel = null
+            restoredFromDraft = false
+        }
+
+        var lastPersisted = saved?.text.orEmpty()
+        while (true) {
+            delay(5_000L)
+            val current = latestDraftState.value
+            if (current != lastPersisted) {
+                val ts = WritingDraftStore.saveDraft(context, draftKey, current)
+                lastPersisted = current
+                if (current.isNotBlank()) {
+                    lastSavedTimeLabel = SavedWritingDraft(current, ts).formattedTime()
+                    restoredFromDraft = false
+                } else {
+                    lastSavedTimeLabel = null
+                    restoredFromDraft = false
+                }
+            }
+        }
+    }
+
+    DisposableEffect(draftKey) {
+        onDispose {
+            val current = latestDraftState.value
+            if (current.isNotBlank()) {
+                WritingDraftStore.saveDraft(context, draftKey, current)
+            }
+        }
     }
 
     val wordCount = remember(essayDraft) {
@@ -129,8 +187,14 @@ fun PracticeWritingView(
                         .weight(1f)
                         .clip(RoundedCornerShape(16.dp))
                         .clickable {
-                            selectedTask = task
-                            onResetAi()
+                            if (selectedTask != task) {
+                                WritingDraftStore.saveDraft(context, draftKey, essayDraft)
+                                val nextKey = WritingDraftStore.practiceKey(pack.moduleId, task)
+                                val nextSaved = WritingDraftStore.loadDraft(context, nextKey)
+                                onEssayDraftChange(nextSaved?.text.orEmpty())
+                                selectedTask = task
+                                onResetAi()
+                            }
                         }
                         .testTag("writing_task_${task.name.lowercase()}")
                 ) {
@@ -328,34 +392,28 @@ fun PracticeWritingView(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                FlowRow(
+                // Word-Count Guard Pill (>= 150 / >= 250 Emerald Green) + 5s Auto-Draft Badge
+                WritingWordCountAndDraftBar(
+                    wordCount = wordCount,
+                    targetWords = targetWords,
+                    lastSavedTimeLabel = lastSavedTimeLabel,
+                    restoredFromDraft = restoredFromDraft,
+                    onClearDraft = {
+                        WritingDraftStore.clearDraft(context, draftKey)
+                        onEssayDraftChange("")
+                        lastSavedTimeLabel = null
+                        restoredFromDraft = false
+                    }
+                )
+
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.End
                 ) {
                     Surface(
                         shape = RoundedCornerShape(50),
-                        color = if (reachedTarget) EmeraldSuccessLight else PracticeTealLight,
-                        modifier = Modifier
-                            .wrapContentWidth()
-                            .testTag("writing_word_count_badge")
-                    ) {
-                        Text(
-                            text = "Word Count: $wordCount / $targetWords từ",
-                            style = MaterialTheme.typography.labelMedium.copy(
-                                fontFamily = PlusJakartaSansFontFamily,
-                                fontWeight = FontWeight.Bold
-                            ),
-                            color = if (reachedTarget) EmeraldOnContainer else TealOnSurface,
-                            maxLines = 1,
-                            softWrap = false,
-                            modifier = Modifier.padding(horizontal = 11.dp, vertical = 5.dp)
-                        )
-                    }
-
-                    Surface(
-                        shape = RoundedCornerShape(50),
                         color = SurfaceCanvas,
+                        border = BorderStroke(1.dp, CardBorderSoft),
                         modifier = Modifier
                             .wrapContentWidth()
                             .clip(RoundedCornerShape(50))
@@ -365,7 +423,7 @@ fun PracticeWritingView(
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
                         ) {
                             Icon(Icons.Rounded.Lightbulb, contentDescription = null, tint = TealOnSurface, modifier = Modifier.size(14.dp))
                             Text(
@@ -401,12 +459,23 @@ fun PracticeWritingView(
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = PracticeTeal,
                         unfocusedBorderColor = CardBorderSoft,
-                        focusedContainerColor = SurfaceCanvas.copy(alpha = 0.5f),
-                        unfocusedContainerColor = SurfaceCanvas.copy(alpha = 0.5f)
+                        focusedContainerColor = CardWhite,
+                        unfocusedContainerColor = SurfaceCanvas
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("writing_essay_input")
+                )
+
+                // Collapsible 4-Criteria IELTS Self-Checklist before AI Band estimation
+                WritingCriteriaChecklistCard(
+                    isTask1 = activePrompt.taskType == WritingTaskType.TASK_1,
+                    resetKey = draftKey,
+                    cardBg = SurfaceCanvas,
+                    borderColor = CardBorderSoft,
+                    primaryText = InkPrimary,
+                    secondaryText = InkSecondary,
+                    accentColor = PracticeTeal
                 )
 
                 Button(

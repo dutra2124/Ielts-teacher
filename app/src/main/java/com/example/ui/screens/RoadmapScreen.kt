@@ -107,6 +107,28 @@ import com.example.ui.theme.SurfaceCanvas
 import com.example.ui.theme.ThemeHeroBrush
 import com.example.ui.theme.ThemeOnPrimary
 import com.example.ui.theme.ThemePrimary
+import androidx.compose.material.icons.rounded.Bolt
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.School
+import androidx.compose.material.icons.rounded.TrackChanges
+import com.example.data.AutoKpiSnapshot
+import com.example.data.SkillBandProgress
+import com.example.data.WeakQuestionDiagnostic
+import com.example.ui.components.GlassSurface
+import com.example.ui.components.tactilePress
+import com.example.ui.screens.dashboard.ConsistencyHeatmapCard
+import com.example.ui.theme.EmeraldOnContainer
+import com.example.ui.theme.EmeraldSuccess
+import com.example.ui.theme.EmeraldSuccessLight
+import com.example.ui.theme.GoldMastery
+import com.example.ui.theme.GoldMasteryLight
+import com.example.ui.theme.GoldOnContainer
+import com.example.ui.theme.PracticeTeal
+import com.example.ui.theme.PracticeTealLight
+import com.example.ui.theme.RoseAlert
+import com.example.ui.theme.RoseDiffLight
+import com.example.ui.theme.StreakOrange
+import com.example.ui.theme.TealOnSurface
 import com.example.ui.theme.ThemeSecondary
 import java.util.Locale
 
@@ -115,7 +137,6 @@ fun RoadmapScreen(
     uiState: ApexIeltsUiState,
     onSelectModule: (Int) -> Unit,
     onToggleModuleCompletion: (Int) -> Unit,
-    onToggleDailyHabit: (String) -> Unit,
     onCycleTip: () -> Unit,
     onTeacherTap: () -> Unit,
     onOpenNotificationSheet: () -> Unit,
@@ -136,7 +157,7 @@ fun RoadmapScreen(
     var selectedTab1View by rememberSaveable { mutableIntStateOf(0) }
     val dashboardSnapshot = remember(
         uiState.streakDays,
-        uiState.completedHabitIds,
+        uiState.autoKpi,
         uiState.weeklyActiveDays,
         uiState.learnedVocabIds,
         uiState.srsWordIds,
@@ -198,58 +219,76 @@ fun RoadmapScreen(
                 )
             }
         } else {
-            // 2. Band Progress Card + Daily Study Habit Tracker
+            // 2. High-Contrast "Tiếp tục học ngay" (1-Tap Smart Resume) Hero Card
             item(
-                key = "band_progress_card",
+                key = "smart_resume_hero_card",
                 span = { GridItemSpan(if (layoutInfo.useMultiColumnGrid) 1 else maxLineSpan) }
             ) {
-                BandProgressCard(
+                SmartResumeHeroCard(
                     currentBand = uiState.currentBand,
                     completedCount = uiState.completedModuleIds.size,
                     totalCount = uiState.modules.size,
                     activeModule = uiState.activeModule,
-                    onOpenLearnTab = onOpenLearnTab,
+                    srsDueCount = uiState.srsReviewWords.size,
+                    autoKpi = uiState.autoKpi,
+                    onResumeNow = onOpenLearnTab,
                     modifier = Modifier
                         .padding(horizontal = hPad)
-                        .offset(y = (-22).dp)
+                        .offset(y = (-18).dp)
                 )
             }
 
+            // 3. IELTS 4-Skill Estimated Band & Top-2 Weakness Diagnostic Card
+            item(
+                key = "four_skill_diagnostic_card",
+                span = { GridItemSpan(if (layoutInfo.useMultiColumnGrid) 1 else maxLineSpan) }
+            ) {
+                FourSkillDiagnosticCard(
+                    skills = dashboardSnapshot.skillProgress,
+                    weakQuestionTypes = dashboardSnapshot.topWeakQuestionTypes,
+                    onPracticeWeakSkill = onPracticeWeakSkill,
+                    modifier = Modifier
+                        .padding(horizontal = hPad)
+                        .offset(y = if (layoutInfo.useMultiColumnGrid) (-18).dp else (-8).dp)
+                )
+            }
+
+            // 4. Compact Collapsible 28-Day Consistency Heatmap (collapsed by default on compact phones)
+            item(
+                key = "compact_28d_heatmap",
+                span = { GridItemSpan(if (layoutInfo.useMultiColumnGrid) 1 else maxLineSpan) }
+            ) {
+                ConsistencyHeatmapCard(
+                    heatmapDays = dashboardSnapshot.heatmapDays,
+                    collapsible = true,
+                    initiallyExpanded = layoutInfo.useMultiColumnGrid,
+                    modifier = Modifier
+                        .padding(horizontal = hPad)
+                        .padding(top = 2.dp, bottom = 8.dp)
+                )
+            }
+
+            // 5. Read-Only Automatic Daily Study KPI Tracker
             item(
                 key = "daily_study_tracker_card",
                 span = { GridItemSpan(if (layoutInfo.useMultiColumnGrid) 1 else maxLineSpan) }
             ) {
                 DailyStudyTrackerCard(
-                    completedHabitIds = uiState.completedHabitIds,
+                    autoKpi = uiState.autoKpi,
                     streakDays = uiState.streakDays,
                     weeklyActiveDays = uiState.weeklyActiveDays,
                     todayWeekdayId = uiState.todayWeekdayId,
                     notificationPrefs = uiState.notificationPrefs,
-                    onToggleHabit = onToggleDailyHabit,
                     onOpenNotificationSheet = onOpenScheduleSettings,
                     streakStatus = uiState.streakStatus,
                     onOpenStreakSheet = onOpenStreakSheet,
-                    dailySelfStudyMinutes = uiState.dailySelfStudyMinutes,
                     modifier = Modifier
                         .padding(horizontal = hPad)
-                        .offset(y = if (layoutInfo.useMultiColumnGrid) (-22).dp else (-10).dp)
-                        .padding(bottom = 4.dp)
+                        .padding(bottom = 10.dp)
                 )
             }
 
-            // 3. Animated 3-Tier Journey Progress Rail (Tier 1 6.0 -> Tier 2 7.0 -> Tier 3 8.0-8.5)
-            item(key = "animated_tier_journey_rail", span = { GridItemSpan(maxLineSpan) }) {
-                AnimatedTierJourneyStrip(
-                    completedCount = uiState.completedModuleIds.size,
-                    totalCount = uiState.modules.size,
-                    activeModuleId = uiState.activeModuleId,
-                    modifier = Modifier
-                        .padding(horizontal = hPad)
-                        .padding(top = 4.dp, bottom = 10.dp)
-                )
-            }
-
-            // 4. Prominent Roadmap Section Heading
+            // 6. Prominent Roadmap Section Heading
             item(key = "roadmap_heading", span = { GridItemSpan(maxLineSpan) }) {
                 Row(
                     modifier = Modifier
@@ -454,7 +493,7 @@ private fun HeroTeacherHeader(
             }
             .statusBarsPadding()
             .displayCutoutPadding()
-            .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 38.dp)
+            .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 28.dp)
     ) {
         // Decluttered Top Bar: Brand + Streak + Reminder Bell + Account Avatar
         BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
@@ -548,6 +587,7 @@ private fun HeroTeacherHeader(
                         shadowElevation = 2.dp,
                         modifier = Modifier
                             .wrapContentWidth()
+                            .tactilePress()
                             .clip(RoundedCornerShape(50))
                             .clickable(onClick = onOpenStreakSheet)
                             .testTag("streak_badge")
@@ -588,6 +628,7 @@ private fun HeroTeacherHeader(
                             shadowElevation = 4.dp,
                             modifier = Modifier
                                 .size(44.dp)
+                                .tactilePress()
                                 .clip(CircleShape)
                                 .clickable(onClick = onOpenNotificationSheet)
                                 .testTag("reminder_bell_button")
@@ -804,45 +845,7 @@ private fun HeroTeacherHeader(
             }
         }
 
-        // Compact, airy AI Teacher + Band 8.5 Upgrade Tip strip
-        if (selectedTab1View == 0) {
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    AnimatedTeacher(
-                        mood = uiState.teacherMood,
-                        isSpeaking = uiState.isTeacherSpeaking,
-                        size = 92.dp,
-                        contentDescriptionText = stringResource(R.string.teacher_cd),
-                        onClick = onTeacherTap
-                    )
-                    Surface(
-                        shape = RoundedCornerShape(50),
-                        color = heroInk.copy(alpha = 0.18f)
-                    ) {
-                        Text(
-                            text = uiState.teacherMood.labelVi,
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp),
-                            color = heroInk,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                        )
-                    }
-                }
-
-                DailyTipSpeechBubble(
-                    tip = uiState.activeDailyTip,
-                    moduleNumber = uiState.activeModule.id,
-                    isSpeaking = uiState.isTeacherSpeaking,
-                    onCycleTip = onCycleTip,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
+        // Decluttered top area: redundant teacher tip banner removed so Smart Resume & 12 Modules surface immediately
     }
 }
 
@@ -979,13 +982,20 @@ private fun DailyTipSpeechBubble(
     }
 }
 
+/**
+ * Action-First "Tiếp tục học ngay" (1-Tap Smart Resume) Hero Card:
+ * Dynamically surfaces the learner's most urgent task (SRS words due or active Module KPI)
+ * paired with compact Band 6.0 -> 8.5 status and a single high-contrast CTA button.
+ */
 @Composable
-private fun BandProgressCard(
+private fun SmartResumeHeroCard(
     currentBand: Float,
     completedCount: Int,
     totalCount: Int,
     activeModule: IeltsModule,
-    onOpenLearnTab: () -> Unit,
+    srsDueCount: Int,
+    autoKpi: AutoKpiSnapshot,
+    onResumeNow: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val apexColors = LocalApexColors.current
@@ -998,191 +1008,430 @@ private fun BandProgressCard(
     LaunchedEffect(Unit) { hasEntered = true }
 
     val animatedBand by animateFloatAsState(
-        targetValue = if (hasEntered) currentBand else 5.0f,
-        animationSpec = tween(durationMillis = 1050, easing = FastOutSlowInEasing),
-        label = "band_count_up"
+        targetValue = if (hasEntered) currentBand else 5.5f,
+        animationSpec = tween(durationMillis = 750, easing = FastOutSlowInEasing),
+        label = "smart_resume_band_anim"
     )
-    val targetFraction = ((currentBand - 6.0f) / 2.5f).coerceIn(0.05f, 1f)
-    val animatedProgress by animateFloatAsState(
-        targetValue = if (hasEntered) targetFraction else 0f,
-        animationSpec = tween(durationMillis = 1100, easing = FastOutSlowInEasing),
-        label = "band_bar_progress"
+    val kpiProgress by animateFloatAsState(
+        targetValue = if (hasEntered) autoKpi.overallProgressFraction.coerceIn(0.06f, 1f) else 0.06f,
+        animationSpec = tween(durationMillis = 700, easing = FastOutSlowInEasing),
+        label = "smart_resume_kpi_progress"
     )
 
-    Surface(
+    val urgentTagVi: String
+    val urgentTitleVi: String
+    val urgentSubtitleVi: String
+    val ctaLabelVi: String
+    val tagBg: Color
+    val tagFg: Color
+
+    when {
+        srsDueCount > 0 -> {
+            urgentTagVi = "ƯU TIÊN SRS • $srsDueCount TỪ ĐẾN HẠN"
+            urgentTitleVi = "Ôn ngay $srsDueCount thẻ SRS trước khi quên"
+            urgentSubtitleVi = "KPI hôm nay: ${autoKpi.dailyWordsLearned}/${autoKpi.targetWordsPerDay} từ • ${autoKpi.dailyStudyMinutes}/${autoKpi.targetMinutesPerDay} phút"
+            ctaLabelVi = "Tiếp tục học ngay"
+            tagBg = GoldMasteryLight
+            tagFg = GoldOnContainer
+        }
+        !autoKpi.isAllDailyKpiMet -> {
+            urgentTagVi = "MODULE #${String.format(Locale.US, "%02d", activeModule.id)} • KPI ${autoKpi.overallPercent}%"
+            urgentTitleVi = activeModule.titleEn
+            urgentSubtitleVi = "${activeModule.titleVi} • ${autoKpi.dailyWordsLearned}/${autoKpi.targetWordsPerDay} từ • ${autoKpi.dailyStudyMinutes}/${autoKpi.targetMinutesPerDay}p"
+            ctaLabelVi = "Tiếp tục học ngay"
+            tagBg = ElectricIndigoLight
+            tagFg = IndigoOnSurface
+        }
+        else -> {
+            urgentTagVi = "✓ ĐÃ ĐẠT 100% KPI HÔM NAY"
+            urgentTitleVi = "Module #${String.format(Locale.US, "%02d", activeModule.id)} • ${activeModule.titleEn}"
+            urgentSubtitleVi = "Xuất sắc! Học tiếp để bứt phá sớm mốc Band 8.5 ($completedCount/$totalCount Module)"
+            ctaLabelVi = "Tiếp tục học ngay"
+            tagBg = EmeraldSuccessLight
+            tagFg = EmeraldOnContainer
+        }
+    }
+
+    GlassSurface(
         modifier = modifier
             .fillMaxWidth()
-            .shadow(
-                elevation = 12.dp,
-                shape = RoundedCornerShape(24.dp),
-                ambientColor = primary.copy(alpha = 0.12f),
-                spotColor = primary.copy(alpha = 0.18f)
-            )
-            .testTag("band_progress_card"),
+            .testTag("smart_resume_hero_card"),
         shape = RoundedCornerShape(24.dp),
-        color = CardWhite,
-        border = BorderStroke(if (highContrast) 1.5.dp else 1.dp, CardBorderSoft)
+        solidColor = CardWhite,
+        solidBorder = BorderStroke(if (highContrast) 1.75.dp else 1.2.dp, primary.copy(alpha = 0.28f)),
+        accentTint = primary,
+        solidShadowElevation = 6.dp
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(
-                        text = stringResource(R.string.band_progress_title),
-                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                        color = InkSecondary
-                    )
-                    Text(
-                        text = stringResource(R.string.modules_completed_label, completedCount, totalCount),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = InkMuted
-                    )
-                }
-
-                Row(
-                    verticalAlignment = Alignment.Bottom,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = tagBg
                 ) {
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text(
-                            text = stringResource(R.string.current_band_label),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = InkMuted
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Bolt,
+                            contentDescription = null,
+                            tint = tagFg,
+                            modifier = Modifier.size(13.dp)
                         )
                         Text(
-                            text = String.format(Locale.US, "%.1f", animatedBand),
-                            style = MaterialTheme.typography.displaySmall.copy(
+                            text = urgentTagVi,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontFamily = PlusJakartaSansFontFamily,
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 10.sp
+                            ),
+                            color = tagFg,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
+                // Compact Band Status Pill (6.0 -> 8.5)
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = CardSurfaceTinted,
+                    border = BorderStroke(1.dp, CardBorderSoft)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = "Band ${String.format(Locale.US, "%.1f", animatedBand)}",
+                            style = MaterialTheme.typography.labelSmall.copy(
                                 fontFamily = PlusJakartaSansFontFamily,
                                 fontWeight = FontWeight.ExtraBold
                             ),
                             color = primary,
                             modifier = Modifier.testTag("animated_band_score")
                         )
-                    }
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
-                        contentDescription = null,
-                        tint = CyanGlow,
-                        modifier = Modifier
-                            .padding(bottom = 8.dp)
-                            .size(18.dp)
-                    )
-                    Column(horizontalAlignment = Alignment.Start) {
                         Text(
-                            text = stringResource(R.string.target_band_label),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = secondary
-                        )
-                        Text(
-                            text = "8.5",
-                            style = MaterialTheme.typography.displaySmall.copy(
-                                fontFamily = PlusJakartaSansFontFamily,
-                                fontWeight = FontWeight.ExtraBold
-                            ),
+                            text = "→ 8.5",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                             color = secondary
                         )
                     }
                 }
             }
 
-            // Animated Band Progress Track
-            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = urgentTitleVi,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontFamily = PlusJakartaSansFontFamily,
+                        fontWeight = FontWeight.ExtraBold
+                    ),
+                    color = InkPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = urgentSubtitleVi,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = InkSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            // Sleek KPI Progress Track
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(7.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(SurfaceCanvas)
+            ) {
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(11.dp)
+                        .fillMaxWidth(kpiProgress)
+                        .height(7.dp)
                         .clip(RoundedCornerShape(50))
-                        .background(SurfaceCanvas)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(animatedProgress)
-                            .height(11.dp)
-                            .clip(RoundedCornerShape(50))
-                            .background(
+                        .background(
+                            if (autoKpi.isAllDailyKpiMet) {
+                                Brush.horizontalGradient(listOf(EmeraldSuccess, CyanGlow))
+                            } else {
                                 Brush.horizontalGradient(listOf(primary, secondary, CyanGlow))
-                            )
+                            }
+                        )
+                )
+            }
+
+            // Single Prominent High-Contrast Solid CTA Button with Tactile Press
+            Button(
+                onClick = onResumeNow,
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = primary,
+                    contentColor = onPrimary
+                ),
+                border = if (highContrast) BorderStroke(1.5.dp, onPrimary.copy(alpha = 0.6f)) else null,
+                elevation = ButtonDefaults.buttonElevation(defaultElevation = 3.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .minimumInteractiveComponentSize()
+                    .tactilePress()
+                    .testTag("start_learning_button")
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.PlayArrow,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = ctaLabelVi,
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontFamily = PlusJakartaSansFontFamily,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Compact IELTS 4-Skill Estimated Band & Top-2 Weakness Diagnostic Card:
+ * - Shows estimated reference scores ("Band ước lượng tham khảo") for Listening, Reading, Writing, Speaking.
+ * - Surfaces top 2 weak question types detected from Chữa đề; tapping launches a targeted 5-minute practice drill.
+ */
+@Composable
+private fun FourSkillDiagnosticCard(
+    skills: List<SkillBandProgress>,
+    weakQuestionTypes: List<WeakQuestionDiagnostic>,
+    onPracticeWeakSkill: (PracticeSkill, String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val primary = ThemePrimary
+    val apexColors = LocalApexColors.current
+
+    GlassSurface(
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("four_skill_diagnostic_card"),
+        shape = RoundedCornerShape(22.dp),
+        solidColor = CardWhite,
+        solidBorder = BorderStroke(if (apexColors.isHighContrast) 1.5.dp else 1.dp, CardBorderSoft)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 15.dp, vertical = 13.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // Header + explicit "Band ước lượng tham khảo" disclaimer badge
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.School,
+                        contentDescription = null,
+                        tint = primary,
+                        modifier = Modifier.size(17.dp)
+                    )
+                    Text(
+                        text = "4 Kỹ năng IELTS",
+                        style = MaterialTheme.typography.titleSmall.copy(
+                            fontFamily = PlusJakartaSansFontFamily,
+                            fontWeight = FontWeight.ExtraBold
+                        ),
+                        color = InkPrimary
                     )
                 }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = CardSurfaceTinted,
+                    border = BorderStroke(1.dp, CardBorderSoft)
                 ) {
-                    listOf("6.0", "7.0", "8.0", "8.5").forEach { milestone ->
-                        val reached = currentBand >= milestone.toFloat()
-                        Text(
-                            text = milestone,
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontWeight = if (reached) FontWeight.Bold else FontWeight.Medium
-                            ),
-                            color = if (reached) primary else InkMuted
-                        )
+                    Text(
+                        text = "Band ước lượng tham khảo",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold
+                        ),
+                        color = InkSecondary,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                    )
+                }
+            }
+
+            // 4-Skill Compact Score Pills (L / R / W / S)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(7.dp)
+            ) {
+                skills.forEach { skillItem ->
+                    val skillAccent = when (skillItem.skill) {
+                        PracticeSkill.LISTENING -> CyanGlow
+                        PracticeSkill.READING -> PracticeTeal
+                        PracticeSkill.WRITING -> primary
+                        PracticeSkill.SPEAKING -> StreakOrange
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = SurfaceCanvas,
+                        border = BorderStroke(1.dp, skillAccent.copy(alpha = 0.28f)),
+                        modifier = Modifier
+                            .weight(1f)
+                            .tactilePress(pressedScale = 0.96f)
+                            .clip(RoundedCornerShape(14.dp))
+                            .clickable {
+                                onPracticeWeakSkill(
+                                    skillItem.skill,
+                                    "Luyện nhanh 5 phút: Nâng cấp ${skillItem.labelEn} từ ${String.format(Locale.US, "%.1f", skillItem.currentBand)}"
+                                )
+                            }
+                            .testTag("skill_band_pill_${skillItem.skill.name.lowercase()}")
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Text(
+                                text = String.format(Locale.US, "%.1f", skillItem.currentBand),
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontFamily = PlusJakartaSansFontFamily,
+                                    fontWeight = FontWeight.ExtraBold
+                                ),
+                                color = skillAccent
+                            )
+                            Text(
+                                text = skillItem.labelEn,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold
+                                ),
+                                color = InkSecondary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
                 }
             }
 
-            // Active Module Strip + High-Visibility Primary CTA Button
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = SurfaceCanvas,
-                border = BorderStroke(1.dp, CardBorderSoft)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 9.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(2.dp)
+            // Top 2 Weak Question Types from Chữa đề (1-tap -> 5-minute targeted practice)
+            if (weakQuestionTypes.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
-                        Text(
-                            text = stringResource(R.string.active_module_prefix),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = InkMuted
+                        Icon(
+                            imageVector = Icons.Rounded.TrackChanges,
+                            contentDescription = null,
+                            tint = RoseAlert,
+                            modifier = Modifier.size(14.dp)
                         )
                         Text(
-                            text = "#${String.format(Locale.US, "%02d", activeModule.id)} ${activeModule.titleEn}",
-                            style = MaterialTheme.typography.titleMedium.copy(fontSize = 13.5.sp),
-                            color = InkPrimary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            text = "Top 2 dạng bài cần luyện nhanh (từ Chữa đề)",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = InkSecondary
                         )
                     }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Button(
-                        onClick = onOpenLearnTab,
-                        shape = RoundedCornerShape(14.dp),
-                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = primary,
-                            contentColor = onPrimary
-                        ),
-                        border = if (highContrast) BorderStroke(1.5.dp, onPrimary.copy(alpha = 0.5f)) else null,
-                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 3.dp),
-                        modifier = Modifier
-                            .minimumInteractiveComponentSize()
-                            .testTag("start_learning_button")
-                    ) {
-                        Text(
-                            text = stringResource(R.string.start_learning_cta),
-                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.ExtraBold)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
+
+                    weakQuestionTypes.forEach { diag ->
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = RoseDiffLight.copy(alpha = 0.42f),
+                            border = BorderStroke(1.dp, RoseAlert.copy(alpha = 0.28f)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .tactilePress(pressedScale = 0.97f)
+                                .clip(RoundedCornerShape(14.dp))
+                                .clickable {
+                                    onPracticeWeakSkill(diag.skill, diag.quickPracticeFocusVi)
+                                }
+                                .minimumInteractiveComponentSize()
+                                .testTag("weak_diagnostic_${diag.id}")
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 11.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(1.dp)
+                                ) {
+                                    Text(
+                                        text = diag.questionTypeVi,
+                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                        color = InkPrimary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = diag.badgeVi,
+                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp),
+                                        color = RoseAlert,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(50),
+                                    color = PracticeTealLight,
+                                    border = BorderStroke(1.dp, PracticeTeal.copy(alpha = 0.35f))
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
+                                    ) {
+                                        Text(
+                                            text = "Luyện 5p",
+                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold),
+                                            color = TealOnSurface,
+                                            maxLines = 1,
+                                            softWrap = false
+                                        )
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                                            contentDescription = null,
+                                            tint = TealOnSurface,
+                                            modifier = Modifier.size(12.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }

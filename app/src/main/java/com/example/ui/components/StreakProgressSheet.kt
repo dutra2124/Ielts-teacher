@@ -27,8 +27,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Lock
-import androidx.compose.material.icons.rounded.RadioButtonUnchecked
+import androidx.compose.material.icons.rounded.MenuBook
 import androidx.compose.material.icons.rounded.Shield
+import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -52,7 +53,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.DefaultHabitData
+import com.example.data.AutoKpiSnapshot
 import com.example.data.StreakMasteryLevel
 import com.example.data.StreakStatus
 import com.example.data.StreakVisualStyle
@@ -71,6 +72,7 @@ import com.example.ui.theme.InkMuted
 import com.example.ui.theme.InkPrimary
 import com.example.ui.theme.InkSecondary
 import com.example.ui.theme.PlusJakartaSansFontFamily
+import com.example.ui.theme.PracticeTeal
 import com.example.ui.theme.RoseAlert
 import com.example.ui.theme.RoseDiffLight
 import com.example.ui.theme.SurfaceCanvas
@@ -78,7 +80,7 @@ import com.example.ui.theme.SurfaceCanvas
 /**
  * Compact Streak Progress Sheet opened when tapping the Streak badge:
  * - Current Mastery level & large animated Growth Tree / Mastery Flame visual
- * - Today's Daily KPI checklist progress (%) with strict once-per-day increment rule
+ * - Today's 100% Automatic Daily KPI read-only progress (strictly zero manual checkboxes)
  * - Days remaining before streak loss (3-day inactivity protection window)
  * - Direct Tree / Flame visual style switcher
  * - Visual preview of all 6 evolution stages
@@ -87,17 +89,14 @@ import com.example.ui.theme.SurfaceCanvas
 @Composable
 fun StreakProgressSheet(
     streakStatus: StreakStatus,
-    completedHabitIds: Set<String>,
+    autoKpi: AutoKpiSnapshot,
     onSelectVisualStyle: (StreakVisualStyle) -> Unit,
-    onToggleDailyHabit: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val kpiTasks = DefaultHabitData.dailyChecklist
-    val completedCount = completedHabitIds.count { id -> kpiTasks.any { it.id == id } }
-    val kpiPercent = if (kpiTasks.isEmpty()) 0 else ((completedCount.toFloat() / kpiTasks.size.toFloat()) * 100f).toInt()
+    val kpiPercent = autoKpi.overallPercent
     val animatedKpiProgress by animateFloatAsState(
-        targetValue = kpiPercent / 100f,
+        targetValue = autoKpi.overallProgressFraction,
         animationSpec = tween(500, easing = FastOutSlowInEasing),
         label = "streak_sheet_kpi_progress"
     )
@@ -137,7 +136,7 @@ fun StreakProgressSheet(
                         color = InkPrimary
                     )
                     Text(
-                        text = "Cộng +1 chuỗi duy nhất 1 lần/ngày khi đạt 100% KPI",
+                        text = "Tự động +1 chuỗi duy nhất 1 lần/ngày khi đạt 100% KPI thực tế",
                         style = MaterialTheme.typography.labelSmall,
                         color = InkSecondary
                     )
@@ -260,7 +259,7 @@ fun StreakProgressSheet(
                             text = when {
                                 hasWarning -> streakStatus.graceWarningVi!!
                                 streakStatus.todayKpiCompleted -> "Đã giữ vững chuỗi hôm nay (+1) • Quy tắc nghỉ quá 3 ngày mới mất chuỗi"
-                                streakStatus.currentStreak == 0 -> "Hoàn thành 100% KPI hôm nay để bắt đầu chuỗi ngày đầu tiên!"
+                                streakStatus.currentStreak == 0 -> "Đạt đủ 2 mục KPI tự động hôm nay để bắt đầu chuỗi ngày đầu tiên!"
                                 else -> "Còn ${streakStatus.daysRemainingBeforeLoss} ngày bảo vệ chuỗi trước khi tự đặt lại về 0"
                             },
                             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
@@ -281,10 +280,10 @@ fun StreakProgressSheet(
                 }
             }
 
-            // Today's Daily KPI Progress Card
+            // Today's 100% Automatic Daily KPI Progress Card (Read-Only)
             Surface(
                 shape = RoundedCornerShape(18.dp),
-                color = SurfaceCanvas,
+                color = CardWhite,
                 border = BorderStroke(1.dp, CardBorderSoft),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -298,7 +297,7 @@ fun StreakProgressSheet(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "KPI hôm nay ($completedCount/${kpiTasks.size} mục tiêu)",
+                            text = "KPI hôm nay (${autoKpi.completedCriteriaCount}/2 tiêu chí tự động)",
                             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                             color = InkPrimary
                         )
@@ -319,38 +318,40 @@ fun StreakProgressSheet(
                             .height(8.dp)
                             .clip(RoundedCornerShape(50)),
                         color = if (kpiPercent >= 100) EmeraldSuccess else ElectricIndigo,
-                        trackColor = CardWhite
+                        trackColor = SurfaceCanvas
                     )
 
-                    kpiTasks.forEach { task ->
-                        val done = completedHabitIds.contains(task.id)
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(CardWhite)
-                                .clickable { onToggleDailyHabit(task.id) }
-                                .padding(horizontal = 10.dp, vertical = 9.dp)
-                                .testTag("streak_sheet_kpi_${task.id}"),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (done) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
-                                contentDescription = null,
-                                tint = if (done) EmeraldSuccess else InkMuted,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Text(
-                                text = task.titleVi,
-                                style = MaterialTheme.typography.bodySmall.copy(
-                                    fontWeight = if (done) FontWeight.SemiBold else FontWeight.Normal
-                                ),
-                                color = if (done) InkPrimary else InkSecondary,
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    }
+                    AutoKpiProgressRow(
+                        icon = Icons.Rounded.MenuBook,
+                        titleVi = "Từ vựng đã học hôm nay",
+                        pillText = autoKpi.vocabProgressPillVi,
+                        subtitleVi = "Tự cộng khi xác nhận Đã thuộc Flashcard, SRS hoặc Mini-game",
+                        progress = autoKpi.vocabProgressFraction,
+                        isMet = autoKpi.isVocabTargetMet,
+                        accentColor = ElectricIndigo,
+                        testTagName = "streak_sheet_auto_kpi_vocab"
+                    )
+
+                    AutoKpiProgressRow(
+                        icon = Icons.Rounded.Timer,
+                        titleVi = "Thời gian học chủ động",
+                        pillText = autoKpi.studyTimeProgressPillVi,
+                        subtitleVi = if (autoKpi.isPausedDueToInactivity) {
+                            "Đang tạm dừng do không tương tác >60 giây (${autoKpi.liveClockFormatted})"
+                        } else {
+                            "Đếm thực tế trên Học, Luyện, Thi • Đã học ${autoKpi.liveClockFormatted}"
+                        },
+                        progress = autoKpi.studyTimeProgressFraction,
+                        isMet = autoKpi.isStudyTimeTargetMet,
+                        accentColor = PracticeTeal,
+                        testTagName = "streak_sheet_auto_kpi_time"
+                    )
+
+                    Text(
+                        text = "Bạn có thể điều chỉnh mục tiêu từ/phút trong Cài đặt → Mục tiêu KPI ngày.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = InkMuted
+                    )
                 }
             }
 

@@ -44,6 +44,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -74,6 +75,7 @@ import com.example.data.PracticeSkill
 import com.example.speech.ApexTtsController
 import com.example.ui.ApexIeltsUiState
 import com.example.ui.components.AnimatedAudioWaveform
+import com.example.ui.components.LocalGlassmorphismDisabled
 import com.example.ui.theme.CardWhite
 import com.example.ui.theme.GoldMastery
 import com.example.ui.theme.GoldMasteryLight
@@ -207,251 +209,282 @@ fun PracticeScreen(
         onInspectSyntaxSentence(sentenceEn, source)
     }
 
-    Box(
+    Column(
         modifier = modifier
             .fillMaxSize()
             .background(SurfaceCanvas)
+            .imePadding()
             .testTag("practice_screen")
     ) {
+        // Ultra-compact Emerald Teal Header (#0D9488) — dedicates 80%+ viewport to active practice
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .imePadding()
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(bottomStart = 20.dp, bottomEnd = 20.dp))
+                .background(PracticeEmeraldGradient)
+                .statusBarsPadding()
+                .displayCutoutPadding()
+                .padding(horizontal = layoutInfo.horizontalPadding, vertical = 9.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Emerald Teal Hero Header (#0D9488)
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(bottomStart = 30.dp, bottomEnd = 30.dp))
-                    .background(PracticeEmeraldGradient)
-                    .drawBehind {
-                        drawCircle(
-                            brush = Brush.radialGradient(
-                                colors = listOf(Color.White.copy(alpha = 0.22f), Color.Transparent),
-                                center = Offset(size.width * 0.88f, size.height * 0.22f),
-                                radius = size.width * 0.44f
-                            ),
-                            radius = size.width * 0.44f,
-                            center = Offset(size.width * 0.88f, size.height * 0.22f)
-                        )
-                    }
-                    .statusBarsPadding()
-                    .displayCutoutPadding()
-                    .padding(horizontal = layoutInfo.horizontalPadding, vertical = 14.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color.White.copy(alpha = 0.22f)
                 ) {
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Surface(
-                                shape = RoundedCornerShape(50),
-                                color = Color.White.copy(alpha = 0.22f),
-                                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.34f)),
-                                modifier = Modifier.wrapContentWidth()
-                            ) {
-                                Text(
-                                    text = "Module #${String.format(Locale.US, "%02d", activeModule.id)} • ${activeModule.tier.bandRange}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = Color.White,
-                                    maxLines = 1,
-                                    softWrap = false,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                                )
-                            }
-
-                            Surface(
-                                shape = RoundedCornerShape(50),
-                                color = Color.White.copy(alpha = 0.18f),
-                                modifier = Modifier.wrapContentWidth()
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                ) {
-                                    Icon(Icons.Rounded.AutoAwesome, contentDescription = null, tint = Color.White, modifier = Modifier.size(12.dp))
-                                    Text(
-                                        text = "4 Kỹ năng AI",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = Color.White,
-                                        maxLines = 1,
-                                        softWrap = false
-                                    )
-                                }
-                            }
-                        }
-
-                        Text(
-                            text = activeModule.titleEn,
-                            style = MaterialTheme.typography.titleLarge.copy(
-                                fontFamily = PlusJakartaSansFontFamily,
-                                fontWeight = FontWeight.ExtraBold
-                            ),
-                            color = InkOnHero,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = "${stringResource(R.string.practice_header_title)} • ${activeModule.titleVi}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = InkOnHeroMuted,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .size(50.dp)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(Color.White.copy(alpha = 0.18f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        AnimatedAudioWaveform(
-                            isActive = true,
-                            width = 30.dp,
-                            height = 18.dp,
-                            primaryColor = Color.White,
-                            secondaryColor = PracticeTealLight
-                        )
-                    }
+                    Text(
+                        text = "M${String.format(Locale.US, "%02d", activeModule.id)}",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold),
+                        color = Color.White,
+                        maxLines = 1,
+                        softWrap = false,
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp)
+                    )
                 }
 
-                // 4-Skill Quick Segmented Selector: Reading | Listening | Speaking | Writing
-                PracticeSkillSegmentedBar(
-                    selectedSkill = currentSkill,
-                    onSelectSkill = { skill ->
-                        ttsController.stop()
-                        selectedSkillIndex = skill.index
-                        if (skill == PracticeSkill.SPEAKING || skill == PracticeSkill.WRITING) {
-                            isSyntaxInspectMode = false
-                        }
-                    }
+                Text(
+                    text = activeModule.titleEn,
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontFamily = PlusJakartaSansFontFamily,
+                        fontWeight = FontWeight.ExtraBold
+                    ),
+                    color = InkOnHero,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
                 )
-            }
 
-            // Focus Banner when arriving from Tab 5 Error Log ("Luyện lại dạng bài yếu")
-            AnimatedVisibility(visible = !uiState.pendingPracticeFocusNote.isNullOrBlank()) {
+                // Compact Assistant Pill 1: Soi câu (Syntax Breakdown)
                 Surface(
-                    shape = RoundedCornerShape(18.dp),
-                    color = GoldMasteryLight,
-                    border = BorderStroke(1.dp, GoldMastery.copy(alpha = 0.55f)),
+                    shape = RoundedCornerShape(50),
+                    color = if (isSyntaxInspectMode) GoldMasteryLight else Color.White.copy(alpha = 0.20f),
+                    border = BorderStroke(
+                        1.dp,
+                        if (isSyntaxInspectMode) GoldMastery else Color.White.copy(alpha = 0.30f)
+                    ),
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = layoutInfo.horizontalPadding)
-                        .testTag("practice_weak_focus_banner")
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.TipsAndUpdates,
-                            contentDescription = null,
-                            tint = GoldOnContainer,
-                            modifier = Modifier.size(19.dp)
-                        )
-                        Text(
-                            text = "Ôn tập trọng điểm từ Nhật ký lỗi sai: ${uiState.pendingPracticeFocusNote.orEmpty()}",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = InkPrimary,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Surface(
-                            shape = RoundedCornerShape(50),
-                            color = CardWhite,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(50))
-                                .clickable { onDismissFocusNote() }
-                                .testTag("dismiss_practice_focus_banner")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Close,
-                                contentDescription = "Đóng ghi chú ôn tập",
-                                tint = InkPrimary,
-                                modifier = Modifier
-                                    .padding(5.dp)
-                                    .size(14.dp)
-                            )
+                        .clip(RoundedCornerShape(50))
+                        .clickable {
+                            if (isReceptiveSkill) {
+                                if (!isSyntaxInspectMode) {
+                                    isSyntaxInspectMode = true
+                                    onShowQuickToast("Đã bật Soi câu — Chạm câu bất kỳ trong bài đọc / transcript!")
+                                } else {
+                                    showSyntaxSheet = true
+                                }
+                            } else {
+                                onResetSyntaxBreakdown()
+                                showSyntaxSheet = true
+                            }
                         }
-                    }
-                }
-            }
-
-            // Active Syntax Inspect Mode Banner (when turned ON for Reading / Listening)
-            AnimatedVisibility(visible = isSyntaxInspectMode && isReceptiveSkill) {
-                Surface(
-                    shape = RoundedCornerShape(18.dp),
-                    color = PracticeTealSurface,
-                    border = BorderStroke(1.5.dp, PracticeTeal),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = layoutInfo.horizontalPadding)
-                        .testTag("syntax_inspect_active_banner")
+                        .testTag("fab_syntax_breakdown")
                 ) {
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.ManageSearch,
-                            contentDescription = null,
-                            tint = TealOnSurface,
-                            modifier = Modifier.size(20.dp)
+                            contentDescription = stringResource(R.string.practice_fab_syntax),
+                            tint = if (isSyntaxInspectMode) GoldOnContainer else Color.White,
+                            modifier = Modifier.size(15.dp)
                         )
                         Text(
-                            text = stringResource(R.string.practice_inspect_banner),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = TealOnSurface,
-                            modifier = Modifier.weight(1f)
+                            text = if (isSyntaxInspectMode) "Đang soi" else "Soi câu",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = if (isSyntaxInspectMode) GoldOnContainer else Color.White,
+                            maxLines = 1,
+                            softWrap = false
                         )
-                        Surface(
-                            shape = RoundedCornerShape(50),
-                            color = PracticeTeal,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(50))
-                                .clickable { isSyntaxInspectMode = false }
-                                .testTag("syntax_inspect_turn_off")
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(3.dp),
-                                modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp)
-                            ) {
-                                Icon(Icons.Rounded.Close, contentDescription = "Tắt chế độ soi", tint = Color.White, modifier = Modifier.size(13.dp))
-                                Text("Tắt", style = MaterialTheme.typography.labelSmall, color = Color.White)
+                    }
+                }
+
+                // Compact Assistant Pill 2: Gợi ý / Từ 8.5+
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = Color.White,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .clickable {
+                            if (isReceptiveSkill) {
+                                if (unlockedHintLevels[activeHintQuestionIndex] == null) {
+                                    unlockedHintLevels[activeHintQuestionIndex] = 1
+                                }
+                                showThreeLevelHintsSheet = true
+                            } else {
+                                showVocabDrawerSheet = true
                             }
                         }
+                        .testTag("fab_smart_hints")
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isReceptiveSkill) Icons.Rounded.TipsAndUpdates else Icons.Rounded.AutoAwesome,
+                            contentDescription = null,
+                            tint = TealOnSurface,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Text(
+                            text = if (isReceptiveSkill) "Gợi ý" else "Từ 8.5+",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = TealOnSurface,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    }
+                }
+
+                // Compact `?` Help Tip Dialog Button
+                com.example.ui.components.CompactHelpTipButton(
+                    title = "Mẹo Luyện 4 Kỹ năng",
+                    tips = listOf(
+                        "Reading/Listening: Chạm tiêu đề câu hỏi để mở/thu gọn, dùng thanh số câu ở dưới để nhảy nhanh.",
+                        "Bấm 'Thu gọn bài đọc' hoặc kéo thanh chia để mở rộng không gian đọc/làm bài.",
+                        "Bật 'Soi câu' rồi chạm vào bất kỳ câu phức nào để AI phân tích ngữ pháp.",
+                        "Dùng nút 'Bảng câu' để kiểm tra các câu chưa làm hoặc đã đánh dấu xem lại."
+                    ),
+                    testTagName = "practice_help_tip_button"
+                )
+            }
+
+            // 4-Skill Quick Segmented Selector: Reading | Listening | Speaking | Writing
+            PracticeSkillSegmentedBar(
+                selectedSkill = currentSkill,
+                onSelectSkill = { skill ->
+                    ttsController.stop()
+                    selectedSkillIndex = skill.index
+                    if (skill == PracticeSkill.SPEAKING || skill == PracticeSkill.WRITING) {
+                        isSyntaxInspectMode = false
+                    }
+                }
+            )
+        }
+
+        // Compact 1-line Focus Strip when arriving from Error Log
+        AnimatedVisibility(visible = !uiState.pendingPracticeFocusNote.isNullOrBlank()) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = GoldMasteryLight,
+                border = BorderStroke(1.dp, GoldMastery.copy(alpha = 0.55f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = layoutInfo.horizontalPadding, vertical = 5.dp)
+                    .testTag("practice_weak_focus_banner")
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.TipsAndUpdates,
+                        contentDescription = null,
+                        tint = GoldOnContainer,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = uiState.pendingPracticeFocusNote.orEmpty(),
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = InkPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Surface(
+                        shape = RoundedCornerShape(50),
+                        color = CardWhite,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .clickable { onDismissFocusNote() }
+                            .testTag("dismiss_practice_focus_banner")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Close,
+                            contentDescription = "Đóng",
+                            tint = InkPrimary,
+                            modifier = Modifier
+                                .padding(4.dp)
+                                .size(13.dp)
+                        )
                     }
                 }
             }
+        }
 
-            // Skill Content Area
-            AnimatedContent(
-                targetState = currentSkill,
-                transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(150)) },
-                label = "practice_skill_content"
-            ) { skill ->
-                when (skill) {
-                    PracticeSkill.READING -> PracticeReadingView(
+        // Compact 1-line Active Syntax Inspect Mode Strip
+        AnimatedVisibility(visible = isSyntaxInspectMode && isReceptiveSkill) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = PracticeTealSurface,
+                border = BorderStroke(1.dp, PracticeTeal),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = layoutInfo.horizontalPadding, vertical = 5.dp)
+                    .testTag("syntax_inspect_active_banner")
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.ManageSearch,
+                        contentDescription = null,
+                        tint = TealOnSurface,
+                        modifier = Modifier.size(17.dp)
+                    )
+                    Text(
+                        text = "Chạm câu bất kỳ để AI soi ngữ pháp",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = TealOnSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Surface(
+                        shape = RoundedCornerShape(50),
+                        color = PracticeTeal,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .clickable { isSyntaxInspectMode = false }
+                            .testTag("syntax_inspect_turn_off")
+                    ) {
+                        Text(
+                            text = "Tắt",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = Color.White,
+                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        // Full-height Skill Content Area (80%+ viewport)
+        AnimatedContent(
+            targetState = currentSkill,
+            transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(140)) },
+            label = "practice_skill_content",
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+        ) { skill ->
+            when (skill) {
+                PracticeSkill.READING -> CompositionLocalProvider(LocalGlassmorphismDisabled provides true) {
+                    PracticeReadingView(
                         pack = bundle.reading,
                         isSyntaxInspectMode = isSyntaxInspectMode,
                         onInspectSentence = { sentence -> triggerSyntaxBreakdown(sentence) },
@@ -462,25 +495,34 @@ fun PracticeScreen(
                         },
                         onReadingChecked = { correct, total ->
                             onPracticeMilestoneCompleted(
-                                "Đã hoàn thành Reading ($correct/$total câu đúng) & mở Keyword Mapping! Đã cập nhật mục tiêu Luyện đề."
+                                "Đã hoàn thành Reading ($correct/$total câu đúng) & mở Keyword Mapping!"
                             )
-                        }
-                    )
-
-                    PracticeSkill.LISTENING -> PracticeListeningView(
-                        pack = bundle.listening,
-                        ttsController = ttsController,
-                        isSyntaxInspectMode = isSyntaxInspectMode,
-                        onInspectSentence = { sentence -> triggerSyntaxBreakdown(sentence) },
-                        onOpenHintForQuestion = { qIdx ->
-                            activeHintQuestionIndex = qIdx
-                            if (unlockedHintLevels[qIdx] == null) unlockedHintLevels[qIdx] = 1
-                            showThreeLevelHintsSheet = true
                         },
-                        onListeningCompleted = onPracticeMilestoneCompleted
+                        modifier = Modifier.fillMaxSize()
                     )
+                }
 
-                    PracticeSkill.SPEAKING -> PracticeSpeakingView(
+                PracticeSkill.LISTENING -> PracticeListeningView(
+                    pack = bundle.listening,
+                    ttsController = ttsController,
+                    isSyntaxInspectMode = isSyntaxInspectMode,
+                    onInspectSentence = { sentence -> triggerSyntaxBreakdown(sentence) },
+                    onOpenHintForQuestion = { qIdx ->
+                        activeHintQuestionIndex = qIdx
+                        if (unlockedHintLevels[qIdx] == null) unlockedHintLevels[qIdx] = 1
+                        showThreeLevelHintsSheet = true
+                    },
+                    onListeningCompleted = onPracticeMilestoneCompleted,
+                    modifier = Modifier.fillMaxSize()
+                )
+
+                PracticeSkill.SPEAKING -> Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(top = 10.dp, bottom = 20.dp)
+                ) {
+                    PracticeSpeakingView(
                         pack = bundle.speaking,
                         transcript = speakingTranscript,
                         onTranscriptChange = { speakingTranscript = it },
@@ -489,126 +531,24 @@ fun PracticeScreen(
                         onEvaluateSpeaking = onEvaluateSpeaking,
                         onResetAi = onResetSpeakingAi
                     )
-
-                    PracticeSkill.WRITING -> PracticeWritingView(
-                        pack = bundle.writing,
-                        essayDraft = writingEssayDraft,
-                        onEssayDraftChange = { writingEssayDraft = it },
-                        aiState = uiState.writingAiState,
-                        onEvaluateWriting = onEvaluateWriting,
-                        onResetAi = onResetWritingAi
-                    )
                 }
-            }
 
-            // Generous bottom spacer so content clears the 2 floating assistant pills
-            Spacer(modifier = Modifier.height(92.dp))
-        }
-
-        // Two Neat Floating Assistant Pills anchored cleanly at bottom-end
-        Row(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Pill 1: Soi Ngữ pháp Câu (Syntax Breakdown)
-            Surface(
-                shape = RoundedCornerShape(50),
-                color = if (isSyntaxInspectMode) PracticeTealDeep else CardWhite,
-                border = BorderStroke(1.5.dp, PracticeTeal),
-                modifier = Modifier
-                    .shadow(
-                        elevation = 8.dp,
-                        shape = RoundedCornerShape(50),
-                        ambientColor = PracticeTeal.copy(alpha = 0.25f),
-                        spotColor = PracticeTeal.copy(alpha = 0.30f)
-                    )
-                    .clip(RoundedCornerShape(50))
-                    .clickable {
-                        if (isReceptiveSkill) {
-                            if (!isSyntaxInspectMode) {
-                                isSyntaxInspectMode = true
-                                onShowQuickToast("Đã bật Soi Ngữ pháp — Chạm vào bất kỳ câu phức nào trong bài đọc / transcript!")
-                            } else {
-                                showSyntaxSheet = true
-                            }
-                        } else {
-                            onResetSyntaxBreakdown()
-                            showSyntaxSheet = true
-                        }
+                PracticeSkill.WRITING -> CompositionLocalProvider(LocalGlassmorphismDisabled provides true) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                            .padding(top = 10.dp, bottom = 20.dp)
+                    ) {
+                        PracticeWritingView(
+                            pack = bundle.writing,
+                            essayDraft = writingEssayDraft,
+                            onEssayDraftChange = { writingEssayDraft = it },
+                            aiState = uiState.writingAiState,
+                            onEvaluateWriting = onEvaluateWriting,
+                            onResetAi = onResetWritingAi
+                        )
                     }
-                    .testTag("fab_syntax_breakdown")
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.ManageSearch,
-                        contentDescription = stringResource(R.string.practice_fab_syntax),
-                        tint = if (isSyntaxInspectMode) Color.White else TealOnSurface,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Text(
-                        text = if (isSyntaxInspectMode) {
-                            stringResource(R.string.practice_fab_syntax_active)
-                        } else {
-                            stringResource(R.string.practice_fab_syntax)
-                        },
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                        color = if (isSyntaxInspectMode) Color.White else TealOnSurface
-                    )
-                }
-            }
-
-            // Pill 2: Smart Hints (Gợi ý 3 cấp for Reading/Listening OR Từ vựng 8.5+ for Writing/Speaking)
-            Surface(
-                shape = RoundedCornerShape(50),
-                color = PracticeTeal,
-                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.28f)),
-                modifier = Modifier
-                    .shadow(
-                        elevation = 8.dp,
-                        shape = RoundedCornerShape(50),
-                        ambientColor = PracticeTeal.copy(alpha = 0.30f),
-                        spotColor = PracticeTeal.copy(alpha = 0.38f)
-                    )
-                    .clip(RoundedCornerShape(50))
-                    .clickable {
-                        if (isReceptiveSkill) {
-                            if (unlockedHintLevels[activeHintQuestionIndex] == null) {
-                                unlockedHintLevels[activeHintQuestionIndex] = 1
-                            }
-                            showThreeLevelHintsSheet = true
-                        } else {
-                            showVocabDrawerSheet = true
-                        }
-                    }
-                    .testTag("fab_smart_hints")
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp)
-                ) {
-                    Icon(
-                        imageVector = if (isReceptiveSkill) Icons.Rounded.TipsAndUpdates else Icons.Rounded.AutoAwesome,
-                        contentDescription = null,
-                        tint = if (isReceptiveSkill) GoldMasteryLight else Color.White,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Text(
-                        text = if (isReceptiveSkill) {
-                            stringResource(R.string.practice_fab_hints)
-                        } else {
-                            stringResource(R.string.practice_fab_vocab)
-                        },
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                        color = Color.White
-                    )
                 }
             }
         }

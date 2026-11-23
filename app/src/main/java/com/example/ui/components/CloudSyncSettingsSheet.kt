@@ -41,12 +41,15 @@ import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.ImageSearch
+import androidx.compose.material.icons.rounded.MenuBook
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.PhotoCamera
+import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material.icons.rounded.RestartAlt
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Storage
+import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -82,6 +85,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.auth.UserAccountProfile
+import com.example.data.AutoKpiSnapshot
+import com.example.data.AutoKpiTracker
+import com.example.data.NotificationCenterState
 import com.example.data.NotificationPreferences
 import com.example.data.ReminderTone
 import com.example.data.StreakVisualStyle
@@ -167,6 +173,7 @@ fun CloudSyncSettingsSheet(
     storageCounts: LocalStorageCounts,
     cloudSyncState: CloudSyncUiState,
     notificationPrefs: NotificationPreferences = NotificationPreferences(),
+    notificationCenterState: NotificationCenterState = NotificationCenterState(),
     userProfile: UserAccountProfile = UserAccountProfile(),
     audioBlobs: List<AudioBlobRecord>,
     studyLogs: List<StudyLogEntry>,
@@ -174,13 +181,17 @@ fun CloudSyncSettingsSheet(
     googleCseCx: String = "",
     streakVisualStyle: StreakVisualStyle = StreakVisualStyle.TREE,
     currentStreakDays: Int = 0,
+    autoKpi: AutoKpiSnapshot = AutoKpiSnapshot(),
     focusScheduleSection: Boolean = false,
     onSheetUrlChange: (String) -> Unit,
     onSyncNow: (String) -> Unit,
     onSaveGoogleCseConfig: (apiKey: String, cx: String) -> Unit = { _, _ -> },
     onSelectStreakVisualStyle: (StreakVisualStyle) -> Unit = {},
+    onUpdateDailyKpiTargets: (targetWords: Int, targetMinutes: Int) -> Unit = { _, _ -> },
     onOpenAvatarPicker: () -> Unit = {},
     onMasterReminderEnabledChange: (Boolean) -> Unit = {},
+    onNotificationSoundEnabledChange: (Boolean) -> Unit = {},
+    onSelectNotificationSound: (uriString: String?, title: String) -> Unit = { _, _ -> },
     onSaveVocabSlot: (existingId: String?, hour: Int, minute: Int, labelVi: String) -> Unit = { _, _, _, _ -> },
     onToggleVocabSlot: (String) -> Unit = {},
     onDeleteVocabSlot: (String) -> Unit = {},
@@ -486,7 +497,10 @@ fun CloudSyncSettingsSheet(
                 // ================================================================
                 StudyScheduleSettingsSection(
                     prefs = notificationPrefs,
+                    notificationCenterState = notificationCenterState,
                     onMasterEnabledChange = onMasterReminderEnabledChange,
+                    onSoundEnabledChange = onNotificationSoundEnabledChange,
+                    onSelectNotificationSound = onSelectNotificationSound,
                     onSaveVocabSlot = onSaveVocabSlot,
                     onToggleVocabSlot = onToggleVocabSlot,
                     onDeleteVocabSlot = onDeleteVocabSlot,
@@ -575,6 +589,14 @@ fun CloudSyncSettingsSheet(
                         }
                     }
                 }
+
+                // ================================================================
+                // PANEL 1C: Mục tiêu KPI ngày (Tự động 100% — 5–30 từ & 10–60 phút)
+                // ================================================================
+                DailyKpiTargetsSettingsCard(
+                    autoKpi = autoKpi,
+                    onUpdateTargets = onUpdateDailyKpiTargets
+                )
             }
 
             // ================================================================
@@ -1243,6 +1265,286 @@ private fun TabCountBadge(tabName: String, count: Int) {
                     modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
                 )
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun DailyKpiTargetsSettingsCard(
+    autoKpi: AutoKpiSnapshot,
+    onUpdateTargets: (targetWords: Int, targetMinutes: Int) -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(18.dp),
+        color = SurfaceCanvas,
+        border = BorderStroke(1.dp, CardBorderSoft),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("settings_daily_kpi_targets_card")
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        text = "Mục tiêu KPI ngày (Tự động)",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                        color = InkPrimary
+                    )
+                    Text(
+                        text = "Hôm nay: ${autoKpi.dailyWordsLearned}/${autoKpi.targetWordsPerDay} từ • ${autoKpi.dailyStudyMinutes}/${autoKpi.targetMinutesPerDay} phút",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (autoKpi.isAllDailyKpiMet) EmeraldSuccess else InkSecondary
+                    )
+                }
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = if (autoKpi.isAllDailyKpiMet) EmeraldSuccessLight else ElectricIndigoLight
+                ) {
+                    Text(
+                        text = if (autoKpi.isAllDailyKpiMet) "✓ Đạt 100%" else "${autoKpi.overallPercent}%",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold),
+                        color = if (autoKpi.isAllDailyKpiMet) EmeraldOnContainer else IndigoOnSurface,
+                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
+                    )
+                }
+            }
+
+            // 1. Vocabulary Words per Day (5..30)
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = CardWhite,
+                border = BorderStroke(1.dp, CardBorderSoft),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.MenuBook,
+                                contentDescription = null,
+                                tint = ElectricIndigo,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = "Từ vựng / ngày",
+                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                color = InkPrimary
+                            )
+                        }
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            KpiStepperIconButton(
+                                icon = Icons.Rounded.Remove,
+                                contentDescription = "Giảm mục tiêu từ vựng",
+                                enabled = autoKpi.targetWordsPerDay > AutoKpiTracker.MIN_TARGET_WORDS,
+                                testTagName = "kpi_words_minus_btn",
+                                onClick = {
+                                    onUpdateTargets(
+                                        (autoKpi.targetWordsPerDay - 1).coerceAtLeast(AutoKpiTracker.MIN_TARGET_WORDS),
+                                        autoKpi.targetMinutesPerDay
+                                    )
+                                }
+                            )
+                            Text(
+                                text = "${autoKpi.targetWordsPerDay} từ",
+                                style = MaterialTheme.typography.titleSmall.copy(
+                                    fontFamily = PlusJakartaSansFontFamily,
+                                    fontWeight = FontWeight.ExtraBold
+                                ),
+                                color = IndigoOnSurface,
+                                modifier = Modifier.testTag("kpi_words_target_value")
+                            )
+                            KpiStepperIconButton(
+                                icon = Icons.Rounded.Add,
+                                contentDescription = "Tăng mục tiêu từ vựng",
+                                enabled = autoKpi.targetWordsPerDay < AutoKpiTracker.MAX_TARGET_WORDS,
+                                testTagName = "kpi_words_plus_btn",
+                                onClick = {
+                                    onUpdateTargets(
+                                        (autoKpi.targetWordsPerDay + 1).coerceAtMost(AutoKpiTracker.MAX_TARGET_WORDS),
+                                        autoKpi.targetMinutesPerDay
+                                    )
+                                }
+                            )
+                        }
+                    }
+
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        listOf(5, 10, 15, 20, 30).forEach { preset ->
+                            val selected = autoKpi.targetWordsPerDay == preset
+                            Surface(
+                                shape = RoundedCornerShape(50),
+                                color = if (selected) ElectricIndigo else SurfaceCanvas,
+                                border = BorderStroke(1.dp, if (selected) ElectricIndigo else CardBorderSoft),
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(50))
+                                    .clickable { onUpdateTargets(preset, autoKpi.targetMinutesPerDay) }
+                                    .testTag("kpi_words_preset_$preset")
+                            ) {
+                                Text(
+                                    text = "$preset từ",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = if (selected) Color.White else InkSecondary,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 2. Study Minutes per Day (10..60)
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = CardWhite,
+                border = BorderStroke(1.dp, CardBorderSoft),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Timer,
+                                contentDescription = null,
+                                tint = PracticeTeal,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = "Thời gian học / ngày",
+                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                color = InkPrimary
+                            )
+                        }
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            KpiStepperIconButton(
+                                icon = Icons.Rounded.Remove,
+                                contentDescription = "Giảm mục tiêu phút học",
+                                enabled = autoKpi.targetMinutesPerDay > AutoKpiTracker.MIN_TARGET_MINUTES,
+                                testTagName = "kpi_minutes_minus_btn",
+                                onClick = {
+                                    onUpdateTargets(
+                                        autoKpi.targetWordsPerDay,
+                                        (autoKpi.targetMinutesPerDay - 5).coerceAtLeast(AutoKpiTracker.MIN_TARGET_MINUTES)
+                                    )
+                                }
+                            )
+                            Text(
+                                text = "${autoKpi.targetMinutesPerDay} phút",
+                                style = MaterialTheme.typography.titleSmall.copy(
+                                    fontFamily = PlusJakartaSansFontFamily,
+                                    fontWeight = FontWeight.ExtraBold
+                                ),
+                                color = TealOnSurface,
+                                modifier = Modifier.testTag("kpi_minutes_target_value")
+                            )
+                            KpiStepperIconButton(
+                                icon = Icons.Rounded.Add,
+                                contentDescription = "Tăng mục tiêu phút học",
+                                enabled = autoKpi.targetMinutesPerDay < AutoKpiTracker.MAX_TARGET_MINUTES,
+                                testTagName = "kpi_minutes_plus_btn",
+                                onClick = {
+                                    onUpdateTargets(
+                                        autoKpi.targetWordsPerDay,
+                                        (autoKpi.targetMinutesPerDay + 5).coerceAtMost(AutoKpiTracker.MAX_TARGET_MINUTES)
+                                    )
+                                }
+                            )
+                        }
+                    }
+
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        listOf(10, 15, 20, 30, 45, 60).forEach { preset ->
+                            val selected = autoKpi.targetMinutesPerDay == preset
+                            Surface(
+                                shape = RoundedCornerShape(50),
+                                color = if (selected) PracticeTeal else SurfaceCanvas,
+                                border = BorderStroke(1.dp, if (selected) PracticeTeal else CardBorderSoft),
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(50))
+                                    .clickable { onUpdateTargets(autoKpi.targetWordsPerDay, preset) }
+                                    .testTag("kpi_minutes_preset_$preset")
+                            ) {
+                                Text(
+                                    text = "${preset}p",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = if (selected) Color.White else InkSecondary,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun KpiStepperIconButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String,
+    enabled: Boolean,
+    testTagName: String,
+    onClick: () -> Unit
+) {
+    Surface(
+        shape = CircleShape,
+        color = if (enabled) SurfaceCanvas else SurfaceCanvas.copy(alpha = 0.45f),
+        border = BorderStroke(1.dp, CardBorderSoft),
+        modifier = Modifier
+            .size(34.dp)
+            .clip(CircleShape)
+            .clickable(enabled = enabled, onClick = onClick)
+            .testTag(testTagName)
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                tint = if (enabled) InkPrimary else InkMuted.copy(alpha = 0.45f),
+                modifier = Modifier.size(16.dp)
+            )
         }
     }
 }

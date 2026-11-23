@@ -45,6 +45,7 @@ data class PersistedUserState(
     val weeklyActiveDays: Set<String> = emptySet(),
     val notificationPrefs: NotificationPreferences = NotificationPreferences(),
     val srsWordIds: Set<String> = emptySet(),
+    val srsSchedules: Map<String, Sm2CardState> = emptyMap(),
     val learnedVocabIds: Set<String> = emptySet(),
     val customExams: List<ExamPaper> = emptyList(),
     val examHistory: List<ExamAttemptRecord> = emptyList(),
@@ -85,8 +86,9 @@ class UserProgressRepository(private val context: Context) {
         val TEST_REPEAT_DAYS = stringSetPreferencesKey("test_repeat_days_v1")
         val REMINDER_TONE = stringPreferencesKey("reminder_tone_v1")
 
-        // Step 3: Tab 2 Learn SRS Review Queue & Learned Vocabulary
+        // Step 3: Tab 2 Learn SRS Review Queue (True SM-2) & Learned Vocabulary
         val SRS_WORD_IDS = stringSetPreferencesKey("srs_word_ids_v1")
+        val SRS_SM2_SCHEDULES_JSON = stringPreferencesKey("srs_sm2_schedules_json_v1")
         val LEARNED_VOCAB_IDS = stringSetPreferencesKey("learned_vocab_ids_v1")
 
         // Step 4: Tab 4 Exam Personal Library & Attempt Score History
@@ -102,6 +104,8 @@ class UserProgressRepository(private val context: Context) {
         val THEME_WALLPAPER_PATTERN_ID = stringPreferencesKey("app_theme_wallpaper_pattern_v2")
         val THEME_CUSTOM_BG_PATH = stringPreferencesKey("app_theme_custom_bg_path_v2")
         val THEME_BG_OVERLAY_OPACITY = floatPreferencesKey("app_theme_bg_overlay_opacity_v2")
+        val THEME_GLASSMORPHISM_ENABLED = booleanPreferencesKey("app_theme_glassmorphism_enabled_v1")
+        val THEME_GLASS_FROST_OPACITY = floatPreferencesKey("app_theme_glass_frost_opacity_v1")
 
         // Offline-First Hybrid Architecture: Google Sheets Cloud Sync metadata
         val GOOGLE_SHEET_URL = stringPreferencesKey("google_sheet_url_v1")
@@ -192,6 +196,7 @@ class UserProgressRepository(private val context: Context) {
                 tone = tone
             ),
             srsWordIds = prefs[Keys.SRS_WORD_IDS].orEmpty(),
+            srsSchedules = Sm2SrsEngine.deserializeMap(prefs[Keys.SRS_SM2_SCHEDULES_JSON]),
             learnedVocabIds = prefs[Keys.LEARNED_VOCAB_IDS].orEmpty(),
             customExams = ExamSerialization.deserializeCustomExams(prefs[Keys.CUSTOM_EXAMS_JSON]),
             examHistory = ExamSerialization.deserializeHistory(prefs[Keys.EXAM_HISTORY_JSON]),
@@ -203,7 +208,9 @@ class UserProgressRepository(private val context: Context) {
                 customSurfaceHex = prefs[Keys.THEME_CUSTOM_SURFACE_HEX]?.toLongOrNull(),
                 wallpaperPattern = AppWallpaperPattern.fromId(prefs[Keys.THEME_WALLPAPER_PATTERN_ID]),
                 customBackgroundPath = prefs[Keys.THEME_CUSTOM_BG_PATH].orEmpty(),
-                backgroundOverlayOpacity = (prefs[Keys.THEME_BG_OVERLAY_OPACITY] ?: 0.35f).coerceIn(0f, 0.85f)
+                backgroundOverlayOpacity = (prefs[Keys.THEME_BG_OVERLAY_OPACITY] ?: 0.35f).coerceIn(0f, 0.85f),
+                glassmorphismEnabled = prefs[Keys.THEME_GLASSMORPHISM_ENABLED] ?: false,
+                glassFrostOpacity = (prefs[Keys.THEME_GLASS_FROST_OPACITY] ?: 0.82f).coerceIn(0.70f, 0.92f)
             ),
             googleSheetUrl = prefs[Keys.GOOGLE_SHEET_URL].orEmpty(),
             lastSyncedAtLabel = prefs[Keys.LAST_SYNCED_AT].orEmpty(),
@@ -293,62 +300,58 @@ class UserProgressRepository(private val context: Context) {
         }
     }
 
-    suspend fun toggleDailyHabit(habitId: String): Pair<Boolean, Boolean> {
-        var isNowChecked = false
-        var allCompletedNow = false
-        val todayKey = DefaultHabitData.currentDateKey()
+    /**
+     * Strictly triggered ONLY when [AutoKpiTracker] confirms BOTH automatic daily criteria
+     * (dailyWordsLearned >= targetWordsPerDay AND dailyStudySeconds >= targetMinutesPerDay * 60)
+     * have reached 100% for the current ISO calendar date.
+     */
+    suspend fun onAutomaticDailyKpiCompleted(
+        todayIso: String = StreakManager.todayIsoDate()
+    ): StreakCompletionResult {
         val currentWeek = DefaultHabitData.currentWeekKey()
         val todayWeekdayId = WeekdayItem.today().id
+        var completionResult = StreakManager.onDailyKpiCompleted(0, "", todayIso)
 
         context.apexProgressDataStore.edit { prefs ->
-            val currentHabits = if (prefs[Keys.COMPLETED_HABIT_DATE] == todayKey) {
-                prefs[Keys.COMPLETED_HABIT_IDS].orEmpty().toMutableSet()
-            } else {
-                mutableSetOf()
+            val storedStreak = (prefs[Keys.STREAK_DAYS] ?: 0).coerceAtLeast(0)
+            val lastDate = (prefs[Keys.LAST_KPI_COMPLETED_DATE] ?: prefs[Keys.STREAK_AWARDED_DATE]).orEmpty()
+            completionResult = StreakManager.onDailyKpiCompleted(
+                storedStreak = storedStreak,
+                lastKpiCompletedDate = lastDate,
+                todayIso = todayIso
+            )
+            if (completionResult.didIncrementToday) {
+                prefs[Keys.STREAK_DAYS] = completionResult.newStreak
+                prefs[Keys.LAST_KPI_COMPLETED_DATE] = completionResult.newLastKpiDateIso
+                prefs[Keys.STREAK_AWARDED_DATE] = completionResult.newLastKpiDateIso
             }
-
-            if (currentHabits.contains(habitId)) {
-                currentHabits.remove(habitId)
-                isNowChecked = false
-            } else {
-                currentHabits.add(habitId)
-                isNowChecked = true
-            }
-
-            prefs[Keys.COMPLETED_HABIT_DATE] = todayKey
-            prefs[Keys.COMPLETED_HABIT_IDS] = currentHabits
 
             val currentWeekly = if (prefs[Keys.WEEKLY_KEY] == currentWeek) {
                 prefs[Keys.WEEKLY_ACTIVE_DAYS].orEmpty().toMutableSet()
             } else {
                 mutableSetOf()
             }
-            if (currentHabits.isNotEmpty()) {
-                currentWeekly.add(todayWeekdayId)
-            } else {
-                currentWeekly.remove(todayWeekdayId)
-            }
+            currentWeekly.add(todayWeekdayId)
             prefs[Keys.WEEKLY_KEY] = currentWeek
             prefs[Keys.WEEKLY_ACTIVE_DAYS] = currentWeekly
+        }
+        return completionResult
+    }
 
-            val totalTasks = DefaultHabitData.dailyChecklist.size
-            if (currentHabits.size >= totalTasks) {
-                allCompletedNow = true
-                val storedStreak = (prefs[Keys.STREAK_DAYS] ?: 0).coerceAtLeast(0)
-                val lastDate = (prefs[Keys.LAST_KPI_COMPLETED_DATE] ?: prefs[Keys.STREAK_AWARDED_DATE]).orEmpty()
-                val outcome = StreakManager.applyDailyKpiCompletion(
-                    storedStreak = storedStreak,
-                    lastKpiCompletedDate = lastDate,
-                    todayIso = todayKey
-                )
-                if (outcome.didIncrementToday) {
-                    prefs[Keys.STREAK_DAYS] = outcome.newStreak
-                    prefs[Keys.LAST_KPI_COMPLETED_DATE] = outcome.newLastKpiDateIso
-                    prefs[Keys.STREAK_AWARDED_DATE] = outcome.newLastKpiDateIso
-                }
+    suspend fun markTodayActiveInWeeklyCalendar() {
+        val currentWeek = DefaultHabitData.currentWeekKey()
+        val todayWeekdayId = WeekdayItem.today().id
+        context.apexProgressDataStore.edit { prefs ->
+            val currentWeekly = if (prefs[Keys.WEEKLY_KEY] == currentWeek) {
+                prefs[Keys.WEEKLY_ACTIVE_DAYS].orEmpty().toMutableSet()
+            } else {
+                mutableSetOf()
+            }
+            if (currentWeekly.add(todayWeekdayId)) {
+                prefs[Keys.WEEKLY_KEY] = currentWeek
+                prefs[Keys.WEEKLY_ACTIVE_DAYS] = currentWeekly
             }
         }
-        return isNowChecked to allCompletedNow
     }
 
     suspend fun markDailyHabitCompleted(habitId: String): Boolean {
@@ -378,32 +381,59 @@ class UserProgressRepository(private val context: Context) {
             currentWeekly.add(todayWeekdayId)
             prefs[Keys.WEEKLY_KEY] = currentWeek
             prefs[Keys.WEEKLY_ACTIVE_DAYS] = currentWeekly
-
-            val totalTasks = DefaultHabitData.dailyChecklist.size
-            if (currentHabits.size >= totalTasks) {
-                val storedStreak = (prefs[Keys.STREAK_DAYS] ?: 0).coerceAtLeast(0)
-                val lastDate = (prefs[Keys.LAST_KPI_COMPLETED_DATE] ?: prefs[Keys.STREAK_AWARDED_DATE]).orEmpty()
-                val outcome = StreakManager.applyDailyKpiCompletion(
-                    storedStreak = storedStreak,
-                    lastKpiCompletedDate = lastDate,
-                    todayIso = todayKey
-                )
-                if (outcome.didIncrementToday) {
-                    prefs[Keys.STREAK_DAYS] = outcome.newStreak
-                    prefs[Keys.LAST_KPI_COMPLETED_DATE] = outcome.newLastKpiDateIso
-                    prefs[Keys.STREAK_AWARDED_DATE] = outcome.newLastKpiDateIso
-                }
-            }
         }
         return newlyCompleted
     }
 
     suspend fun addWordToSrsQueue(wordId: String) {
+        val todayIso = StreakManager.todayIsoDate()
         context.apexProgressDataStore.edit { prefs ->
             val updated = prefs[Keys.SRS_WORD_IDS].orEmpty().toMutableSet()
             updated.add(wordId)
             prefs[Keys.SRS_WORD_IDS] = updated
+
+            val schedules = Sm2SrsEngine.deserializeMap(prefs[Keys.SRS_SM2_SCHEDULES_JSON]).toMutableMap()
+            if (!schedules.containsKey(wordId)) {
+                schedules[wordId] = Sm2CardState(
+                    wordId = wordId,
+                    repetitions = 0,
+                    intervalDays = 0,
+                    easeFactor = 2.5f,
+                    nextReviewDateIso = todayIso
+                )
+                prefs[Keys.SRS_SM2_SCHEDULES_JSON] = Sm2SrsEngine.serializeMap(schedules)
+            }
         }
+    }
+
+    suspend fun recordSm2Review(
+        wordId: String,
+        quality: Sm2RecallQuality,
+        todayIso: String = StreakManager.todayIsoDate()
+    ): Sm2CardState {
+        var nextState = Sm2CardState(wordId = wordId, nextReviewDateIso = todayIso)
+        context.apexProgressDataStore.edit { prefs ->
+            val updatedIds = prefs[Keys.SRS_WORD_IDS].orEmpty().toMutableSet()
+            updatedIds.add(wordId)
+            prefs[Keys.SRS_WORD_IDS] = updatedIds
+
+            val schedules = Sm2SrsEngine.deserializeMap(prefs[Keys.SRS_SM2_SCHEDULES_JSON]).toMutableMap()
+            nextState = Sm2SrsEngine.review(
+                current = schedules[wordId],
+                wordId = wordId,
+                quality = quality,
+                todayIso = todayIso
+            )
+            schedules[wordId] = nextState
+            prefs[Keys.SRS_SM2_SCHEDULES_JSON] = Sm2SrsEngine.serializeMap(schedules)
+
+            if (quality == Sm2RecallQuality.GOOD || quality == Sm2RecallQuality.EASY) {
+                val learned = prefs[Keys.LEARNED_VOCAB_IDS].orEmpty().toMutableSet()
+                learned.add(wordId)
+                prefs[Keys.LEARNED_VOCAB_IDS] = learned
+            }
+        }
+        return nextState
     }
 
     suspend fun removeWordFromSrsQueue(wordId: String) {
@@ -411,6 +441,11 @@ class UserProgressRepository(private val context: Context) {
             val updated = prefs[Keys.SRS_WORD_IDS].orEmpty().toMutableSet()
             updated.remove(wordId)
             prefs[Keys.SRS_WORD_IDS] = updated
+
+            val schedules = Sm2SrsEngine.deserializeMap(prefs[Keys.SRS_SM2_SCHEDULES_JSON]).toMutableMap()
+            if (schedules.remove(wordId) != null) {
+                prefs[Keys.SRS_SM2_SCHEDULES_JSON] = Sm2SrsEngine.serializeMap(schedules)
+            }
         }
     }
 
@@ -673,6 +708,18 @@ class UserProgressRepository(private val context: Context) {
         }
     }
 
+    suspend fun setGlassmorphismEnabled(enabled: Boolean) {
+        context.apexProgressDataStore.edit { prefs ->
+            prefs[Keys.THEME_GLASSMORPHISM_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setGlassFrostOpacity(opacity: Float) {
+        context.apexProgressDataStore.edit { prefs ->
+            prefs[Keys.THEME_GLASS_FROST_OPACITY] = opacity.coerceIn(0.70f, 0.92f)
+        }
+    }
+
     suspend fun resetThemeCustomization() {
         context.apexProgressDataStore.edit { prefs ->
             prefs[Keys.THEME_MODE_ID] = AppThemeMode.LIGHT.id
@@ -682,6 +729,8 @@ class UserProgressRepository(private val context: Context) {
             prefs[Keys.THEME_WALLPAPER_PATTERN_ID] = AppWallpaperPattern.NONE.id
             prefs[Keys.THEME_CUSTOM_BG_PATH] = ""
             prefs[Keys.THEME_BG_OVERLAY_OPACITY] = 0.35f
+            prefs[Keys.THEME_GLASSMORPHISM_ENABLED] = false
+            prefs[Keys.THEME_GLASS_FROST_OPACITY] = 0.82f
             prefs[Keys.AUTO_DARK_EXAM_ROOM] = true
         }
     }
@@ -727,33 +776,6 @@ class UserProgressRepository(private val context: Context) {
             currentWeekly.add(todayWeekdayId)
             prefs[Keys.WEEKLY_KEY] = currentWeek
             prefs[Keys.WEEKLY_ACTIVE_DAYS] = currentWeekly
-
-            if (updatedTotal >= 10) {
-                val currentHabits = if (prefs[Keys.COMPLETED_HABIT_DATE] == todayKey) {
-                    prefs[Keys.COMPLETED_HABIT_IDS].orEmpty().toMutableSet()
-                } else {
-                    mutableSetOf()
-                }
-                currentHabits.add("habit_practice_15")
-                prefs[Keys.COMPLETED_HABIT_DATE] = todayKey
-                prefs[Keys.COMPLETED_HABIT_IDS] = currentHabits
-
-                val totalTasks = DefaultHabitData.dailyChecklist.size
-                if (currentHabits.size >= totalTasks) {
-                    val storedStreak = (prefs[Keys.STREAK_DAYS] ?: 0).coerceAtLeast(0)
-                    val lastDate = (prefs[Keys.LAST_KPI_COMPLETED_DATE] ?: prefs[Keys.STREAK_AWARDED_DATE]).orEmpty()
-                    val outcome = StreakManager.applyDailyKpiCompletion(
-                        storedStreak = storedStreak,
-                        lastKpiCompletedDate = lastDate,
-                        todayIso = todayKey
-                    )
-                    if (outcome.didIncrementToday) {
-                        prefs[Keys.STREAK_DAYS] = outcome.newStreak
-                        prefs[Keys.LAST_KPI_COMPLETED_DATE] = outcome.newLastKpiDateIso
-                        prefs[Keys.STREAK_AWARDED_DATE] = outcome.newLastKpiDateIso
-                    }
-                }
-            }
         }
         return updatedTotal
     }
@@ -1049,6 +1071,7 @@ class UserProgressRepository(private val context: Context) {
             prefs[Keys.STREAK_AWARDED_DATE] = ""
             prefs[Keys.LAST_KPI_COMPLETED_DATE] = ""
             prefs[Keys.SRS_WORD_IDS] = emptySet()
+            prefs[Keys.SRS_SM2_SCHEDULES_JSON] = "{}"
             prefs[Keys.LEARNED_VOCAB_IDS] = emptySet()
             prefs[Keys.EXAM_HISTORY_JSON] = "[]"
             prefs[Keys.DAILY_SELF_STUDY_MINUTES] = 0

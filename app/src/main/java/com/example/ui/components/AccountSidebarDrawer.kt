@@ -142,6 +142,7 @@ fun AccountAvatarButton(
         modifier = modifier
             .minimumInteractiveComponentSize()
             .size(44.dp)
+            .tactilePress()
             .clip(CircleShape)
             .clickable(onClick = onClick)
             .testTag("account_avatar_button")
@@ -209,8 +210,15 @@ fun AccountSidebarDrawerContent(
     var fallbackReasonVi by remember { mutableStateOf<String?>(null) }
     var isGoogleBusy by remember { mutableStateOf(false) }
 
+    val glassOn = isGlassmorphismActive()
+    val drawerBg = if (glassOn) {
+        CardWhite.copy(alpha = resolvedGlassAlpha(boostAlpha = 0.06f))
+    } else {
+        CardWhite
+    }
+
     ModalDrawerSheet(
-        drawerContainerColor = CardWhite,
+        drawerContainerColor = drawerBg,
         modifier = Modifier
             .widthIn(min = 290.dp, max = 340.dp)
             .fillMaxHeight()
@@ -637,12 +645,15 @@ private fun DrawerMenuRowItem(
     onClick: () -> Unit,
     testTag: String
 ) {
-    Surface(
+    GlassSurface(
         shape = RoundedCornerShape(16.dp),
-        color = SurfaceCanvas,
-        border = BorderStroke(1.dp, CardBorderSoft),
+        solidColor = SurfaceCanvas,
+        solidBorder = BorderStroke(1.dp, CardBorderSoft),
+        solidShadowElevation = 0.dp,
+        glassShadowElevation = 2.dp,
         modifier = Modifier
             .fillMaxWidth()
+            .tactilePress()
             .clip(RoundedCornerShape(16.dp))
             .clickable(onClick = onClick)
             .minimumInteractiveComponentSize()

@@ -57,6 +57,9 @@ import com.example.data.TeacherMood
 import com.example.speech.ApexTtsController
 import com.example.speech.EnglishAccent
 import com.example.ui.components.AnimatedTeacher
+import com.example.ui.components.answerFeedbackShake
+import com.example.ui.components.rememberSemanticAnswerBorderColor
+import com.example.ui.components.tactilePress
 import com.example.ui.theme.CardBorderSoft
 import com.example.ui.theme.CardSurfaceTinted
 import com.example.ui.theme.CardWhite
@@ -85,7 +88,7 @@ private enum class SyntaxCheckStatus {
 @Composable
 fun SyntaxReorderSubTab(
     ttsController: ApexTtsController,
-    onExerciseSolved: () -> Unit,
+    onExerciseSolved: (String) -> Unit,
     modifier: Modifier = Modifier,
     exercises: List<SyntaxExercise> = LearnCurriculum.syntaxExercises
 ) {
@@ -97,33 +100,22 @@ fun SyntaxReorderSubTab(
     var checkStatus by remember(exercise.id) { mutableStateOf(SyntaxCheckStatus.BUILDING) }
     var solvedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
 
-    val shakeOffset = remember { Animatable(0f) }
-    val scope = rememberCoroutineScope()
+    var errorShakeTrigger by remember(exercise.id) { mutableIntStateOf(0) }
 
-    val triggerShake: () -> Unit = {
-        scope.launch {
-            val keyframes = listOf(-26f, 26f, -18f, 18f, -10f, 10f, 0f)
-            keyframes.forEach { target ->
-                shakeOffset.animateTo(target, animationSpec = tween(durationMillis = 48))
-            }
-        }
-    }
-
-    val boxBorderColor by animateColorAsState(
-        targetValue = when (checkStatus) {
-            SyntaxCheckStatus.ERROR -> RoseAlert
-            SyntaxCheckStatus.SUCCESS -> EmeraldSuccess
-            SyntaxCheckStatus.BUILDING -> ElectricIndigo.copy(alpha = 0.25f)
+    val boxBorderColor by rememberSemanticAnswerBorderColor(
+        isCorrect = when (checkStatus) {
+            SyntaxCheckStatus.SUCCESS -> true
+            SyntaxCheckStatus.ERROR -> false
+            SyntaxCheckStatus.BUILDING -> null
         },
-        animationSpec = tween(220),
-        label = "syntax_box_border"
+        defaultColor = ElectricIndigo.copy(alpha = 0.25f)
     )
 
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+            .padding(horizontal = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         // 5-Exercise Number Pill Selector
         Row(
@@ -132,8 +124,8 @@ fun SyntaxReorderSubTab(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Bài tập Band 8.5+ (${solvedIds.size}/${activeExercises.size})",
-                style = MaterialTheme.typography.titleSmall,
+                text = "Câu phức (${solvedIds.size}/${activeExercises.size})",
+                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
                 color = InkSecondary
             )
 
@@ -183,33 +175,33 @@ fun SyntaxReorderSubTab(
 
         // Exercise Prompt Card
         Surface(
-            shape = RoundedCornerShape(24.dp),
+            shape = RoundedCornerShape(20.dp),
             color = CardWhite,
             border = BorderStroke(1.dp, CardBorderSoft)
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                    .padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Surface(
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(8.dp),
                         color = ElectricIndigoLight
                     ) {
                         Text(
                             text = exercise.structureTagVi,
                             style = MaterialTheme.typography.labelSmall,
                             color = ElectricIndigo,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                         )
                     }
                     Surface(
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(8.dp),
                         color = CyanGlowLight
                     ) {
                         Text(
@@ -218,16 +210,11 @@ fun SyntaxReorderSubTab(
                                 fontFamily = PlusJakartaSansFontFamily
                             ),
                             color = ElectricIndigo,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                         )
                     }
                 }
 
-                Text(
-                    text = "Nghĩa tiếng Việt mục tiêu:",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = InkMuted
-                )
                 Text(
                     text = exercise.meaningVi,
                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
@@ -240,7 +227,7 @@ fun SyntaxReorderSubTab(
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .offset { IntOffset(shakeOffset.value.roundToInt(), 0) }
+                .answerFeedbackShake(triggerKey = errorShakeTrigger)
                 .shadow(
                     elevation = if (checkStatus == SyntaxCheckStatus.SUCCESS) 14.dp else 4.dp,
                     shape = RoundedCornerShape(22.dp),
@@ -295,6 +282,7 @@ fun SyntaxReorderSubTab(
                                     SyntaxCheckStatus.BUILDING -> ElectricIndigo
                                 },
                                 modifier = Modifier
+                                    .tactilePress(enabled = checkStatus != SyntaxCheckStatus.SUCCESS)
                                     .clip(RoundedCornerShape(14.dp))
                                     .clickable(enabled = checkStatus != SyntaxCheckStatus.SUCCESS) {
                                         selectedIndices = selectedIndices - chunkIdx
@@ -334,6 +322,7 @@ fun SyntaxReorderSubTab(
                         if (alreadyUsed) CardBorderSoft.copy(alpha = 0.5f) else ElectricIndigo.copy(alpha = 0.30f)
                     ),
                     modifier = Modifier
+                        .tactilePress(enabled = !alreadyUsed && checkStatus != SyntaxCheckStatus.SUCCESS)
                         .clip(RoundedCornerShape(14.dp))
                         .clickable(enabled = !alreadyUsed && checkStatus != SyntaxCheckStatus.SUCCESS) {
                             selectedIndices = selectedIndices + idx
@@ -393,6 +382,7 @@ fun SyntaxReorderSubTab(
                     modifier = Modifier
                         .weight(1f)
                         .minimumInteractiveComponentSize()
+                        .tactilePress()
                         .testTag("syntax_next_button")
                 ) {
                     Text(text = stringResource(R.string.syntax_next_btn))
@@ -410,10 +400,10 @@ fun SyntaxReorderSubTab(
                         if (assembled == exercise.orderedChunks) {
                             checkStatus = SyntaxCheckStatus.SUCCESS
                             solvedIds = solvedIds + exercise.id
-                            onExerciseSolved()
+                            onExerciseSolved(exercise.id)
                         } else {
                             checkStatus = SyntaxCheckStatus.ERROR
-                            triggerShake()
+                            errorShakeTrigger++
                         }
                     },
                     enabled = selectedIndices.size == exercise.orderedChunks.size,
@@ -425,6 +415,7 @@ fun SyntaxReorderSubTab(
                     modifier = Modifier
                         .weight(1f)
                         .minimumInteractiveComponentSize()
+                        .tactilePress(enabled = selectedIndices.size == exercise.orderedChunks.size)
                         .testTag("syntax_check_button")
                 ) {
                     Text(text = stringResource(R.string.syntax_check_btn))

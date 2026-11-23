@@ -3,6 +3,7 @@ package com.example.ui
 import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewModelScope
 import com.example.ai.AppCheckDiagnostics
 import com.example.ai.AppCheckStatusStore
@@ -23,9 +24,12 @@ import com.example.auth.SecurityPreferences
 import com.example.auth.UserAccountProfile
 import com.example.data.ActiveExamSession
 import com.example.data.ActivePushBanner
+import com.example.data.AutoKpiSnapshot
+import com.example.data.AutoKpiTracker
 import com.example.data.DailyBandTip
 import com.example.data.DeepQuestionAnalysis
 import com.example.data.DefaultHabitData
+import com.example.data.KpiCelebrationBanner
 import com.example.data.ExamAttemptRecord
 import com.example.data.ExamBankCurriculum
 import com.example.data.ExamHubSubTab
@@ -34,11 +38,17 @@ import com.example.data.ExamSkillMode
 import com.example.data.IeltsCurriculum
 import com.example.data.IeltsModule
 import com.example.data.LearnCurriculum
+import com.example.data.NotificationCenterState
+import com.example.data.NotificationInboxItem
 import com.example.data.NotificationPreferences
+import com.example.data.NotificationRepository
 import com.example.data.PracticeSkill
 import com.example.data.ReminderSlot
 import com.example.data.ReminderTone
 import com.example.data.ReviewErrorLogItem
+import com.example.data.Sm2CardState
+import com.example.data.Sm2RecallQuality
+import com.example.data.Sm2SrsEngine
 import com.example.data.StreakManager
 import com.example.data.StreakStatus
 import com.example.data.StreakVisualStyle
@@ -86,6 +96,8 @@ data class ApexIeltsUiState(
     val streakDays: Int = 0,
     val streakStatus: StreakStatus = StreakStatus(),
     val isStreakSheetOpen: Boolean = false,
+    val autoKpi: AutoKpiSnapshot = AutoKpiSnapshot(),
+    val kpiCelebrationBanner: KpiCelebrationBanner? = null,
     val reminderEnabled: Boolean = true,
     val teacherMood: TeacherMood = TeacherMood.TEACHING,
     val isTeacherSpeaking: Boolean = true,
@@ -96,10 +108,12 @@ data class ApexIeltsUiState(
     val weeklyActiveDays: Set<String> = emptySet(),
     val todayWeekdayId: String = WeekdayItem.today().id,
     val notificationPrefs: NotificationPreferences = NotificationPreferences(),
+    val notificationCenterState: NotificationCenterState = NotificationCenterState(),
     val isNotificationSheetOpen: Boolean = false,
     val activePushBanner: ActivePushBanner? = null,
-    // Step 3: Tab 2 Learn (SRS Queue, Learned Vocab & Gemini AI Sentence Builder)
+    // Step 3: Tab 2 Learn (True SM-2 SRS Queue, Learned Vocab & Gemini AI Sentence Builder)
     val srsWordIds: Set<String> = emptySet(),
+    val srsSchedules: Map<String, Sm2CardState> = emptyMap(),
     val learnedVocabIds: Set<String> = emptySet(),
     val sentenceAiState: SentenceAiUiState = SentenceAiUiState.Idle,
     // Step 4: Tab 3 Practice (Syntax Breakdown, Speaking AI & Writing AI)
@@ -161,6 +175,18 @@ data class ApexIeltsUiState(
     val activeModule: IeltsModule
         get() = modules.firstOrNull { it.id == activeModuleId } ?: IeltsCurriculum.moduleById(activeModuleId)
 
+    val allMergedVocabulary: List<VocabWordItem>
+        get() {
+            val merged = LinkedHashMap<String, VocabWordItem>()
+            allVocabulary.forEach { merged[it.id] = it }
+            (1..12).forEach { modId ->
+                LearnCurriculum.wordsForModule(modId).forEach { item ->
+                    if (!merged.containsKey(item.id)) merged[item.id] = item
+                }
+            }
+            return merged.values.toList()
+        }
+
     val activeModuleWords: List<VocabWordItem>
         get() {
             val dbWords = allVocabulary.filter { it.moduleId == activeModuleId }
@@ -178,22 +204,32 @@ data class ApexIeltsUiState(
             return srsWordIds.mapNotNull { id -> byId[id] ?: LearnCurriculum.wordById(id) }
         }
 
+    val dueSrsReviewWords: List<VocabWordItem>
+        get() {
+            val todayIso = StreakManager.todayIsoDate()
+            return srsReviewWords.filter { word ->
+                val state = srsSchedules[word.id]
+                state == null || state.isDueOn(todayIso)
+            }
+        }
+
     val unlearnedActiveModuleWords: List<VocabWordItem>
         get() = activeModuleWords.filterNot { learnedVocabIds.contains(it.id) }
 
+    val visibleNotifications: List<NotificationInboxItem>
+        get() = NotificationRepository.buildVisibleNotifications(
+            activeModule = activeModule,
+            dueSrsWords = srsReviewWords,
+            unlearnedModuleWords = unlearnedActiveModuleWords,
+            notificationPrefs = notificationPrefs,
+            todayWeekdayId = todayWeekdayId,
+            recommendedExam = authenticExams.firstOrNull(),
+            hasCompletedActiveModule = completedModuleIds.contains(activeModuleId),
+            centerState = notificationCenterState
+        )
+
     val notificationUnreadCount: Int
-        get() {
-            val vocabDue = (srsReviewWords.map { it.id } + unlearnedActiveModuleWords.map { it.id }).toSet().size
-            val isTestDayToday = notificationPrefs.testRepeatDays.contains(todayWeekdayId)
-            val testAlerts = if (isTestDayToday) {
-                notificationPrefs.testSlots.count { it.enabled }.coerceAtLeast(1)
-            } else if (!completedModuleIds.contains(activeModuleId)) {
-                1
-            } else {
-                0
-            }
-            return vocabDue + testAlerts
-        }
+        get() = visibleNotifications.count { !it.isRead }
 
     val currentBand: Float
         get() = IeltsCurriculum.calculateEstimatedBand(completedModuleIds)
@@ -208,6 +244,7 @@ data class ApexIeltsUiState(
 class ApexIeltsViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = UserProgressRepository(application.applicationContext)
+    private val notificationRepository = NotificationRepository(application.applicationContext)
     private val hybridRepository = ApexHybridRepository(application.applicationContext)
     private val sheetsSyncService = GoogleSheetsSyncService(hybridRepository)
     private val networkMonitor = NetworkStatusMonitor(application.applicationContext)
@@ -249,9 +286,17 @@ class ApexIeltsViewModel(application: Application) : AndroidViewModel(applicatio
     private val todayIsoDateFlow = MutableStateFlow(StreakManager.todayIsoDate())
     private val isAvatarPickerOpen = MutableStateFlow(false)
     private val settingsFocusSchedule = MutableStateFlow(false)
+    private val kpiCelebrationBanner = MutableStateFlow<KpiCelebrationBanner?>(null)
+
+    private val autoKpiTracker = AutoKpiTracker(
+        context = application.applicationContext,
+        scope = viewModelScope,
+        onDailyKpiReached = ::handleAutomaticDailyKpiReached
+    )
 
     private var speechPulseJob: Job? = null
     private var bannerAutoDismissJob: Job? = null
+    private var kpiCelebrationDismissJob: Job? = null
     private var lastFiredMinuteKey: String? = null
 
     private data class EphemeralUiOverlay(
@@ -462,8 +507,13 @@ class ApexIeltsViewModel(application: Application) : AndroidViewModel(applicatio
         repository.userStateFlow,
         overlayFlow,
         hybridContentFlow,
-        AppCheckStatusStore.diagnostics
-    ) { persisted, overlay, hybrid, appCheck ->
+        AppCheckStatusStore.diagnostics,
+        combine(
+            autoKpiTracker.snapshotFlow,
+            kpiCelebrationBanner,
+            notificationRepository.stateFlow
+        ) { kpi, banner, notifCenter -> Triple(kpi, banner, notifCenter) }
+    ) { persisted, overlay, hybrid, appCheck, (autoKpiSnap, celebration, notifCenterState) ->
         GeminiResilientClient.personalGeminiApiKey = persisted.personalGeminiApiKey
         val authenticExams = hybrid.exams.filter { !it.isCustom }.ifEmpty { ExamBankCurriculum.authenticExams }
         val mergedCustomExams = LinkedHashMap<String, ExamPaper>().apply {
@@ -491,6 +541,8 @@ class ApexIeltsViewModel(application: Application) : AndroidViewModel(applicatio
             streakDays = computedStreakStatus.currentStreak,
             streakStatus = computedStreakStatus,
             isStreakSheetOpen = hybrid.streakSheetOpen,
+            autoKpi = autoKpiSnap,
+            kpiCelebrationBanner = celebration,
             reminderEnabled = persisted.reminderEnabled,
             teacherMood = overlay.mood,
             isTeacherSpeaking = overlay.speaking,
@@ -500,9 +552,11 @@ class ApexIeltsViewModel(application: Application) : AndroidViewModel(applicatio
             weeklyActiveDays = persisted.weeklyActiveDays,
             todayWeekdayId = WeekdayItem.today().id,
             notificationPrefs = persisted.notificationPrefs,
+            notificationCenterState = notifCenterState,
             isNotificationSheetOpen = overlay.sheetOpen,
             activePushBanner = overlay.banner,
             srsWordIds = persisted.srsWordIds,
+            srsSchedules = persisted.srsSchedules,
             learnedVocabIds = persisted.learnedVocabIds,
             sentenceAiState = overlay.sentenceAi,
             syntaxBreakdownState = overlay.syntaxBreakdown,
@@ -560,11 +614,18 @@ class ApexIeltsViewModel(application: Application) : AndroidViewModel(applicatio
     )
 
     init {
-        ApexNotificationHelper.ensureNotificationChannel(application.applicationContext)
         triggerSpeakingPulse(TeacherMood.TEACHING, durationMs = 5_000L)
         startRealtimeReminderWatcher()
         // Boot immediately 100% offline from bundled assets/data/*.json into Room SQLite
         viewModelScope.launch {
+            notificationRepository.checkDateRollover()
+            val notifState = runCatching { notificationRepository.stateFlow.first() }
+                .getOrDefault(NotificationCenterState())
+            ApexNotificationHelper.ensureNotificationChannel(
+                context = application.applicationContext,
+                soundEnabled = notifState.isNotificationSoundEnabled,
+                soundUriString = notifState.notificationSoundUri
+            )
             val legacyCustom = runCatching { repository.userStateFlow.first().customExams }.getOrDefault(emptyList())
             hybridRepository.ensureBundledSeedData(legacyCustomExams = legacyCustom)
             checkStreakInactivityForToday()
@@ -596,8 +657,61 @@ class ApexIeltsViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    private suspend fun handleAutomaticDailyKpiReached(dateIso: String) {
+        val result = repository.onAutomaticDailyKpiCompleted(dateIso)
+        if (result.didIncrementToday) {
+            triggerSpeakingPulse(TeacherMood.CHEERING, durationMs = 5_500L)
+            kpiCelebrationBanner.value = KpiCelebrationBanner(
+                streakDays = result.newStreak,
+                messageVi = result.celebrationMessageVi,
+                evolvedStageTitleVi = if (result.didEvolveMilestone) result.newLevel.titleVi else null
+            )
+            kpiCelebrationDismissJob?.cancel()
+            kpiCelebrationDismissJob = viewModelScope.launch {
+                delay(7_500L)
+                kpiCelebrationBanner.value = null
+            }
+            hybridRepository.addStudyLog(
+                category = "KPI",
+                summaryVi = result.celebrationMessageVi
+            )
+        }
+    }
+
+    fun createAutoKpiLifecycleObserver(): LifecycleEventObserver =
+        autoKpiTracker.createLifecycleObserver()
+
+    fun setInStudyScreenContext(inStudy: Boolean) {
+        autoKpiTracker.setInStudyContext(inStudy)
+    }
+
+    fun recordUserInteraction() {
+        autoKpiTracker.recordUserInteraction()
+    }
+
+    fun dismissKpiCelebrationBanner() {
+        kpiCelebrationDismissJob?.cancel()
+        kpiCelebrationBanner.value = null
+    }
+
+    fun updateDailyKpiTargets(targetWords: Int, targetMinutes: Int) {
+        viewModelScope.launch {
+            autoKpiTracker.updateDailyTargets(targetWords = targetWords, targetMinutes = targetMinutes)
+            val clampedWords = targetWords.coerceIn(
+                AutoKpiTracker.MIN_TARGET_WORDS,
+                AutoKpiTracker.MAX_TARGET_WORDS
+            )
+            val clampedMin = targetMinutes.coerceIn(
+                AutoKpiTracker.MIN_TARGET_MINUTES,
+                AutoKpiTracker.MAX_TARGET_MINUTES
+            )
+            snackbarMessage.value = "Đã cập nhật mục tiêu KPI ngày: $clampedWords từ vựng • $clampedMin phút học"
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
+        autoKpiTracker.shutdown()
         networkMonitor.unregister()
     }
 
@@ -649,20 +763,6 @@ class ApexIeltsViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    fun toggleDailyHabit(habitId: String) {
-        viewModelScope.launch {
-            val (checked, allCompleted) = repository.toggleDailyHabit(habitId)
-            when {
-                allCompleted && checked -> {
-                    triggerSpeakingPulse(TeacherMood.CHEERING, durationMs = 4_800L)
-                    snackbarMessage.value = "Xuất sắc! Bạn đã hoàn thành 100% mục tiêu học hôm nay!"
-                }
-                checked -> triggerSpeakingPulse(TeacherMood.ENCOURAGING, durationMs = 3_000L)
-                else -> triggerSpeakingPulse(TeacherMood.TEACHING, durationMs = 2_400L)
-            }
-        }
-    }
-
     fun cycleDailyTip() {
         viewModelScope.launch {
             repository.incrementTipCycle()
@@ -681,9 +781,16 @@ class ApexIeltsViewModel(application: Application) : AndroidViewModel(applicatio
     fun markWordStudied(wordId: String) {
         viewModelScope.launch {
             repository.markVocabWordStudied(wordId)
-            val studiedCount = uiState.value.learnedVocabIds.size + 1
-            if (studiedCount >= 3) {
-                repository.markDailyHabitCompleted("habit_vocab_10")
+            repository.markTodayActiveInWeeklyCalendar()
+            val newlyCounted = autoKpiTracker.recordWordLearned(wordId)
+            if (newlyCounted) {
+                val snap = autoKpiTracker.snapshotFlow.value
+                val wordLabel = uiState.value.allVocabulary.firstOrNull { it.id == wordId }?.word
+                    ?: LearnCurriculum.wordById(wordId)?.word
+                if (wordLabel != null) {
+                    snackbarMessage.value =
+                        "Đã nhớ từ \"$wordLabel\" • KPI từ vựng: ${snap.dailyWordsLearned}/${snap.targetWordsPerDay}"
+                }
             }
         }
     }
@@ -701,27 +808,63 @@ class ApexIeltsViewModel(application: Application) : AndroidViewModel(applicatio
     fun markSrsWordMastered(wordId: String) {
         viewModelScope.launch {
             repository.removeWordFromSrsQueue(wordId)
-            val word = LearnCurriculum.wordById(wordId)?.word ?: wordId
+            repository.markVocabWordStudied(wordId)
+            repository.markTodayActiveInWeeklyCalendar()
+            autoKpiTracker.recordWordLearned(wordId)
+            val word = uiState.value.allVocabulary.firstOrNull { it.id == wordId }?.word
+                ?: LearnCurriculum.wordById(wordId)?.word
+                ?: wordId
             triggerSpeakingPulse(TeacherMood.CHEERING, durationMs = 3_200L)
-            snackbarMessage.value = "Tuyệt vời! Đã thuộc vững từ \"$word\" trong hàng chờ SRS"
+            snackbarMessage.value = "Tuyệt vời! Đã thuộc vững từ \"$word\" (+1 từ KPI hôm nay)"
+        }
+    }
+
+    fun reviewSrsWordSm2(wordId: String, quality: Sm2RecallQuality) {
+        viewModelScope.launch {
+            val nextState = repository.recordSm2Review(wordId = wordId, quality = quality)
+            repository.markTodayActiveInWeeklyCalendar()
+            if (quality != Sm2RecallQuality.AGAIN) {
+                autoKpiTracker.recordWordLearned(wordId)
+            }
+            val word = uiState.value.allVocabulary.firstOrNull { it.id == wordId }?.word
+                ?: LearnCurriculum.wordById(wordId)?.word
+                ?: wordId
+            val intervalText = Sm2SrsEngine.formatIntervalVi(nextState.intervalDays)
+            if (quality == Sm2RecallQuality.AGAIN) {
+                triggerSpeakingPulse(TeacherMood.ENCOURAGING, durationMs = 2_800L)
+                snackbarMessage.value = "Giữ \"$word\" trong hàng đợi hôm nay để ôn lại (SM-2: ${intervalText}, EF ${nextState.easeFactor})"
+            } else {
+                triggerSpeakingPulse(TeacherMood.CHEERING, durationMs = 3_000L)
+                snackbarMessage.value = "SM-2 [${quality.labelVi}]: Ôn lại \"$word\" sau $intervalText (${nextState.nextReviewDateIso})"
+            }
+        }
+    }
+
+    fun onMiniGameWordCorrect(wordId: String) {
+        viewModelScope.launch {
+            repository.markVocabWordStudied(wordId)
+            repository.markTodayActiveInWeeklyCalendar()
+            autoKpiTracker.recordWordLearned(wordId)
         }
     }
 
     fun onMiniGameCompleted(score: Int, totalQuestions: Int, bestCombo: Int, missedCount: Int) {
         viewModelScope.launch {
-            repository.markDailyHabitCompleted("habit_reflex_1")
+            repository.markTodayActiveInWeeklyCalendar()
             triggerSpeakingPulse(TeacherMood.CHEERING, durationMs = 4_200L)
+            val snap = autoKpiTracker.snapshotFlow.value
             snackbarMessage.value = if (missedCount > 0) {
-                "Hoàn thành Game ($score/$totalQuestions • Combo x$bestCombo)! Đã thêm $missedCount từ vào SRS & cập nhật Tiến độ hôm nay."
+                "Hoàn thành Game ($score/$totalQuestions • Combo x$bestCombo)! Đã thêm $missedCount từ vào SRS • KPI từ: ${snap.dailyWordsLearned}/${snap.targetWordsPerDay}"
             } else {
-                "Hoàn hảo ($score/$totalQuestions • Combo x$bestCombo)! Đã cập nhật Daily Study Tracker!"
+                "Hoàn hảo ($score/$totalQuestions • Combo x$bestCombo)! KPI từ vựng: ${snap.dailyWordsLearned}/${snap.targetWordsPerDay}"
             }
         }
     }
 
-    fun onSyntaxExerciseSolved() {
+    fun onSyntaxExerciseSolved(exerciseId: String = "syntax_drill") {
         viewModelScope.launch {
-            repository.markDailyHabitCompleted("habit_vocab_10")
+            repository.markTodayActiveInWeeklyCalendar()
+            autoKpiTracker.recordWordLearned("drill_$exerciseId")
         }
         triggerSpeakingPulse(TeacherMood.CHEERING, durationMs = 3_600L)
     }
@@ -747,7 +890,8 @@ class ApexIeltsViewModel(application: Application) : AndroidViewModel(applicatio
                 )
                 sentenceAiState.value = SentenceAiUiState.Success(evaluation)
                 repository.markVocabWordStudied(targetWord.id)
-                repository.markDailyHabitCompleted("habit_vocab_10")
+                repository.markTodayActiveInWeeklyCalendar()
+                autoKpiTracker.recordWordLearned(targetWord.id)
                 triggerSpeakingPulse(TeacherMood.CHEERING, durationMs = 4_200L)
             } catch (e: CancellationException) {
                 throw e
@@ -1138,6 +1282,18 @@ class ApexIeltsViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    fun setGlassmorphismEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            repository.setGlassmorphismEnabled(enabled)
+        }
+    }
+
+    fun setGlassFrostOpacity(opacity: Float) {
+        viewModelScope.launch {
+            repository.setGlassFrostOpacity(opacity)
+        }
+    }
+
     fun resetThemeToDefault() {
         viewModelScope.launch {
             WallpaperStorageHelper.clearPersistedWallpapers(getApplication<Application>().applicationContext)
@@ -1318,10 +1474,11 @@ class ApexIeltsViewModel(application: Application) : AndroidViewModel(applicatio
     fun saveHighlightAsFlashcard(word: VocabWordItem) {
         viewModelScope.launch {
             hybridRepository.saveSingleVocabWord(word)
+            repository.addWordToSrsQueue(word.id)
             repository.markDailyHabitCompleted("habit_vocab_10")
             triggerSpeakingPulse(TeacherMood.CHEERING, durationMs = 3_500L)
             snackbarMessage.value =
-                "Đã lưu Flashcard \"${word.word}\" vào Module #${word.moduleId} (sẵn sàng trên Tab 2 Học)!"
+                "Đã lưu \"${word.word}\" vào Flashcard SRS (Module #${word.moduleId}) kèm câu ngữ cảnh!"
         }
     }
 
@@ -1348,13 +1505,14 @@ class ApexIeltsViewModel(application: Application) : AndroidViewModel(applicatio
     fun logSelfStudySession(materialTitle: String, minutes: Int) {
         viewModelScope.launch {
             val totalToday = repository.recordSelfStudyMinutes(minutes)
+            autoKpiTracker.addVerifiedStudySeconds(minutes * 60)
             hybridRepository.addStudyLog(
                 category = "Self-Study",
                 summaryVi = "Tự học ${minutes} phút: $materialTitle (Tổng hôm nay: ${totalToday} phút)"
             )
             triggerSpeakingPulse(TeacherMood.CHEERING, durationMs = 4_200L)
             snackbarMessage.value =
-                "Đã ghi nhận +${minutes} phút tự học (Tổng hôm nay: ${totalToday}p) • Đã cập nhật chỉ số chuyên cần!"
+                "Đã ghi nhận +${minutes} phút tự học (Tổng hôm nay: ${totalToday}p) • Đã cập nhật KPI tự động!"
         }
     }
 
@@ -1498,6 +1656,75 @@ class ApexIeltsViewModel(application: Application) : AndroidViewModel(applicatio
         settingsFocusSchedule.value = false
     }
 
+    // =========================================================================
+    // Persistent Notification Center (Read / Dismiss) & Notification Sound Controls
+    // =========================================================================
+
+    fun markNotificationRead(notificationId: String) {
+        viewModelScope.launch {
+            notificationRepository.markRead(notificationId)
+        }
+    }
+
+    fun markAllNotificationsRead() {
+        val visibleIds = uiState.value.visibleNotifications.map { it.id }
+        if (visibleIds.isEmpty()) return
+        viewModelScope.launch {
+            notificationRepository.markAllRead(visibleIds)
+            snackbarMessage.value = "Đã đánh dấu đã đọc tất cả thông báo hôm nay."
+        }
+    }
+
+    fun dismissNotification(notificationId: String) {
+        viewModelScope.launch {
+            notificationRepository.dismissNotification(notificationId)
+        }
+    }
+
+    fun clearAllNotifications() {
+        val visibleIds = uiState.value.visibleNotifications.map { it.id }
+        if (visibleIds.isEmpty()) return
+        viewModelScope.launch {
+            notificationRepository.dismissAll(visibleIds)
+            snackbarMessage.value = "Đã xóa tất cả thông báo hôm nay."
+        }
+    }
+
+    fun toggleNotificationSound() {
+        val nextEnabled = !uiState.value.notificationCenterState.isNotificationSoundEnabled
+        setNotificationSoundEnabled(nextEnabled)
+    }
+
+    fun setNotificationSoundEnabled(enabled: Boolean) {
+        val currentUri = uiState.value.notificationCenterState.notificationSoundUri
+        viewModelScope.launch {
+            notificationRepository.setSoundEnabled(enabled)
+            ApexNotificationHelper.ensureNotificationChannel(
+                context = getApplication<Application>().applicationContext,
+                soundEnabled = enabled,
+                soundUriString = currentUri
+            )
+            snackbarMessage.value = if (enabled) {
+                "Đã bật âm thanh thông báo."
+            } else {
+                "Đã tắt âm thanh thông báo (chế độ im lặng)."
+            }
+        }
+    }
+
+    fun updateNotificationSound(uriString: String?, title: String) {
+        val soundEnabled = uiState.value.notificationCenterState.isNotificationSoundEnabled
+        viewModelScope.launch {
+            notificationRepository.setNotificationSound(uriString, title)
+            ApexNotificationHelper.ensureNotificationChannel(
+                context = getApplication<Application>().applicationContext,
+                soundEnabled = soundEnabled,
+                soundUriString = uriString
+            )
+            snackbarMessage.value = "Đã chọn âm thanh thông báo: $title"
+        }
+    }
+
     fun openAvatarPicker() {
         isAvatarPickerOpen.value = true
     }
@@ -1569,6 +1796,8 @@ class ApexIeltsViewModel(application: Application) : AndroidViewModel(applicatio
                 if (currentIso != lastCheckedIso) {
                     lastCheckedIso = currentIso
                     checkStreakInactivityForToday()
+                    autoKpiTracker.checkDateRollover()
+                    notificationRepository.checkDateRollover()
                 }
                 val state = uiState.value
                 val prefs = state.notificationPrefs
@@ -1617,10 +1846,13 @@ class ApexIeltsViewModel(application: Application) : AndroidViewModel(applicatio
             activeModule = activeModule
         )
 
+        val notifSoundState = uiState.value.notificationCenterState
         ApexNotificationHelper.postStudyReminderNotification(
             context = getApplication<Application>().applicationContext,
             title = title,
-            message = body
+            message = body,
+            soundEnabled = notifSoundState.isNotificationSoundEnabled,
+            soundUriString = notifSoundState.notificationSoundUri
         )
 
         activePushBanner.value = ActivePushBanner(
@@ -1819,9 +2051,12 @@ class ApexIeltsViewModel(application: Application) : AndroidViewModel(applicatio
     fun resetStudyProgress() {
         viewModelScope.launch {
             repository.resetStudyProgress()
+            autoKpiTracker.resetTodayProgress()
+            notificationRepository.resetDailyInbox()
+            kpiCelebrationBanner.value = null
             hybridRepository.addStudyLog(
                 category = "System",
-                summaryVi = "Đặt lại tiến độ học tập (Streak, Module, SRS, Lịch sử thi)"
+                summaryVi = "Đặt lại tiến độ học tập (Streak, KPI, Module, SRS, Lịch sử thi)"
             )
             triggerSpeakingPulse(TeacherMood.ENCOURAGING, durationMs = 4_000L)
             snackbarMessage.value = "Đã đặt lại tiến độ học tập về trạng thái ban đầu!"

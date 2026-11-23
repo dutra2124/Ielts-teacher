@@ -32,6 +32,7 @@ import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.BookmarkAdd
 import androidx.compose.material.icons.rounded.BookmarkAdded
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Flip
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Stop
@@ -74,8 +75,33 @@ import com.example.speech.ApexPronunciationEvaluator
 import com.example.speech.ApexTtsController
 import com.example.speech.EnglishAccent
 import com.example.speech.PronunciationResult
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
 import com.example.ui.components.AnimatedAudioWaveform
 import com.example.ui.components.AnimatedTeacher
+import com.example.ui.components.GlassSurface
+import com.example.ui.components.shouldReduceMotion
+import com.example.ui.components.tactilePress
+import kotlinx.coroutines.launch
+import kotlin.math.abs
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.FilterListOff
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.ui.text.style.TextOverflow
+import kotlinx.coroutines.delay
 import com.example.ui.theme.CardBorderSoft
 import com.example.ui.theme.CardSurfaceTinted
 import com.example.ui.theme.CardWhite
@@ -83,6 +109,7 @@ import com.example.ui.theme.CyanGlow
 import com.example.ui.theme.CyanGlowLight
 import com.example.ui.theme.ElectricIndigo
 import com.example.ui.theme.ElectricIndigoLight
+import com.example.ui.theme.EmeraldOnContainer
 import com.example.ui.theme.EmeraldSuccess
 import com.example.ui.theme.EmeraldSuccessLight
 import com.example.ui.theme.GoldMastery
@@ -96,11 +123,22 @@ import com.example.ui.theme.RoseAlert
 import com.example.ui.theme.SurfaceCanvas
 import com.example.ui.theme.VividViolet
 
+private enum class VocabStatusFilter(val labelVi: String) {
+    ALL("Tất cả"),
+    UNLEARNED("Chưa thuộc"),
+    REVIEWING("Đang ôn"),
+    LEARNED("Đã thuộc")
+}
+
 @Composable
 fun FlashcardSubTab(
     words: List<VocabWordItem>,
+    allVocabulary: List<VocabWordItem> = words,
+    activeModuleId: Int = 1,
     selectedIndex: Int,
     srsWordIds: Set<String>,
+    learnedVocabIds: Set<String> = emptySet(),
+    dailyLearnedWordIds: Set<String> = emptySet(),
     speakingAccent: EnglishAccent?,
     ttsController: ApexTtsController,
     topicHintEn: String = "",
@@ -114,76 +152,301 @@ fun FlashcardSubTab(
     onShowMessage: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    if (words.isEmpty()) return
+    val fullPool = remember(allVocabulary, words) {
+        if (allVocabulary.isNotEmpty()) allVocabulary else words
+    }
+    if (fullPool.isEmpty()) return
 
-    val safeIndex = selectedIndex.coerceIn(0, words.lastIndex)
-    val word = words[safeIndex]
-    val context = LocalContext.current
+    // Fast 300ms debounced search + multi-criteria filters (Status + Module 1–12)
+    var rawQuery by remember { mutableStateOf("") }
+    var debouncedQuery by remember { mutableStateOf("") }
+    var statusFilter by remember { mutableStateOf(VocabStatusFilter.ALL) }
+    var selectedModuleFilter by remember(activeModuleId) { mutableStateOf<Int?>(activeModuleId) }
+    var showModuleStrip by remember { mutableStateOf(false) }
 
-    var isFlipped by remember(word.id) { mutableStateOf(false) }
-    var isListeningVoice by remember(word.id) { mutableStateOf(false) }
-    var pronunciationResult by remember(word.id) { mutableStateOf<PronunciationResult?>(null) }
-    var voiceErrorVi by remember(word.id) { mutableStateOf<String?>(null) }
-    var activeRecognizer by remember { mutableStateOf<SpeechRecognizer?>(null) }
-
-    // Clean up SpeechRecognizer when word changes or composable leaves composition
-    DisposableEffect(word.id) {
-        onDispose {
-            activeRecognizer?.destroy()
-            activeRecognizer = null
-            isListeningVoice = false
-        }
+    LaunchedEffect(rawQuery) {
+        delay(300L)
+        debouncedQuery = rawQuery.trim()
     }
 
-    val startVoiceCheck = {
-        voiceErrorVi = null
-        pronunciationResult = null
-        activeRecognizer?.destroy()
-        isListeningVoice = true
-        activeRecognizer = ApexPronunciationEvaluator.startListening(
-            context = context,
-            targetWord = word.word,
-            pronunciationFocusVi = word.pronunciationFocusVi,
-            onReady = { isListeningVoice = true },
-            onResult = { result ->
-                isListeningVoice = false
-                pronunciationResult = result
-                if (!result.isStrongPass) {
-                    onAddToSrs(word.id)
-                }
-            },
-            onError = { err ->
-                isListeningVoice = false
-                voiceErrorVi = err
+    val isUsingCustomFilter = debouncedQuery.isNotBlank() ||
+        statusFilter != VocabStatusFilter.ALL ||
+        selectedModuleFilter != activeModuleId
+
+    val filteredWords = remember(
+        fullPool,
+        words,
+        selectedModuleFilter,
+        activeModuleId,
+        debouncedQuery,
+        statusFilter,
+        srsWordIds,
+        learnedVocabIds,
+        dailyLearnedWordIds
+    ) {
+        val byModule = when {
+            selectedModuleFilter == null -> fullPool
+            selectedModuleFilter == activeModuleId -> {
+                val matched = fullPool.filter { it.moduleId == activeModuleId }
+                matched.ifEmpty { words }
             }
-        )
-        if (activeRecognizer == null) {
-            isListeningVoice = false
+            else -> fullPool.filter { it.moduleId == selectedModuleFilter }
         }
-    }
-
-    val audioPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (granted) {
-            startVoiceCheck()
+        val byStatus = when (statusFilter) {
+            VocabStatusFilter.ALL -> byModule
+            VocabStatusFilter.UNLEARNED -> byModule.filter {
+                !learnedVocabIds.contains(it.id) && !dailyLearnedWordIds.contains(it.id)
+            }
+            VocabStatusFilter.REVIEWING -> byModule.filter { srsWordIds.contains(it.id) }
+            VocabStatusFilter.LEARNED -> byModule.filter {
+                learnedVocabIds.contains(it.id) || dailyLearnedWordIds.contains(it.id)
+            }
+        }
+        if (debouncedQuery.isBlank()) {
+            byStatus
         } else {
-            voiceErrorVi = "Vui lòng cấp quyền Micro để Trợ giảng AI lắng nghe và chấm điểm phát âm của bạn."
+            val q = debouncedQuery.lowercase()
+            byStatus.filter { item ->
+                item.word.lowercase().contains(q) ||
+                    item.meaningVi.lowercase().contains(q) ||
+                    item.exampleEn.lowercase().contains(q) ||
+                    item.cefrLevel.lowercase().contains(q) ||
+                    item.wordFamily.lowercase().contains(q)
+            }
         }
     }
 
-    val flipRotation by animateFloatAsState(
-        targetValue = if (isFlipped) 180f else 0f,
-        animationSpec = tween(durationMillis = 480, easing = FastOutSlowInEasing),
-        label = "flashcard_3d_flip"
-    )
+    var localFilteredIndex by remember(selectedModuleFilter, statusFilter, debouncedQuery) {
+        mutableIntStateOf(0)
+    }
+
+    val effectiveIndex = if (isUsingCustomFilter) {
+        localFilteredIndex.coerceIn(0, (filteredWords.size - 1).coerceAtLeast(0))
+    } else {
+        selectedIndex.coerceIn(0, (filteredWords.size - 1).coerceAtLeast(0))
+    }
+
+    fun selectDisplayIndex(newIndex: Int) {
+        if (filteredWords.isEmpty()) return
+        val clamped = newIndex.coerceIn(0, filteredWords.lastIndex)
+        if (isUsingCustomFilter) {
+            localFilteredIndex = clamped
+        } else {
+            onSelectIndex(clamped)
+        }
+    }
+
+    val context = LocalContext.current
 
     Column(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        // Fast Debounced Search + Status & Module 1–12 Filter Bar
+        VocabSearchAndFilterCard(
+            rawQuery = rawQuery,
+            onQueryChange = { rawQuery = it },
+            statusFilter = statusFilter,
+            onSelectStatus = { statusFilter = it },
+            selectedModuleFilter = selectedModuleFilter,
+            activeModuleId = activeModuleId,
+            showModuleStrip = showModuleStrip,
+            onToggleModuleStrip = { showModuleStrip = !showModuleStrip },
+            onSelectModule = { selectedModuleFilter = it },
+            resultCount = filteredWords.size,
+            totalCount = fullPool.size
+        )
+
+        if (filteredWords.isEmpty()) {
+            Surface(
+                shape = RoundedCornerShape(22.dp),
+                color = CardWhite,
+                border = BorderStroke(1.dp, CardBorderSoft),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("vocab_filter_empty_state")
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.FilterListOff,
+                        contentDescription = null,
+                        tint = ElectricIndigo,
+                        modifier = Modifier.size(34.dp)
+                    )
+                    Text(
+                        text = "Không có từ vựng khớp bộ lọc",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                        color = InkPrimary
+                    )
+                    Text(
+                        text = if (selectedModuleFilter != null && debouncedQuery.isNotBlank()) {
+                            "Thử mở rộng tìm kiếm sang toàn bộ 12 Module hoặc xóa bộ lọc trạng thái."
+                        } else {
+                            "Hãy đổi từ khóa hoặc chọn lại trạng thái để xem danh sách từ."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = InkSecondary
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (selectedModuleFilter != null && debouncedQuery.isNotBlank()) {
+                            OutlinedButton(
+                                onClick = { selectedModuleFilter = null },
+                                shape = RoundedCornerShape(12.dp),
+                                border = BorderStroke(1.dp, ElectricIndigo)
+                            ) {
+                                Text("Tìm cả 12 Module", color = ElectricIndigo)
+                            }
+                        }
+                        Button(
+                            onClick = {
+                                rawQuery = ""
+                                debouncedQuery = ""
+                                statusFilter = VocabStatusFilter.ALL
+                                selectedModuleFilter = activeModuleId
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = ElectricIndigo),
+                            modifier = Modifier.testTag("vocab_clear_filters_btn")
+                        ) {
+                            Text("Xóa bộ lọc")
+                        }
+                    }
+                }
+            }
+        } else {
+
+        // Virtualized Quick-Jump Strip when browsing large filtered/searched sets
+        if (filteredWords.size > 1 && isUsingCustomFilter) {
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("vocab_quick_jump_row")
+            ) {
+                itemsIndexed(filteredWords, key = { _, item -> item.id }) { idx, item ->
+                    val isSelected = idx == effectiveIndex
+                    val isLearned = learnedVocabIds.contains(item.id) || dailyLearnedWordIds.contains(item.id)
+                    val isSrs = srsWordIds.contains(item.id)
+                    Surface(
+                        shape = RoundedCornerShape(50),
+                        color = if (isSelected) ElectricIndigo else CardWhite,
+                        border = BorderStroke(
+                            1.dp,
+                            when {
+                                isSelected -> ElectricIndigo
+                                isSrs -> GoldMastery
+                                isLearned -> EmeraldSuccess.copy(alpha = 0.65f)
+                                else -> CardBorderSoft
+                            }
+                        ),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .clickable { selectDisplayIndex(idx) }
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                        ) {
+                            Text(
+                                text = item.word,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontFamily = PlusJakartaSansFontFamily,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                ),
+                                color = if (isSelected) Color.White else InkPrimary,
+                                maxLines = 1
+                            )
+                            Text(
+                                text = "M${item.moduleId}",
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp),
+                                color = if (isSelected) Color.White.copy(alpha = 0.82f) else InkMuted
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        val word = filteredWords[effectiveIndex]
+
+        var isFlipped by remember(word.id) { mutableStateOf(false) }
+        var isListeningVoice by remember(word.id) { mutableStateOf(false) }
+        var pronunciationResult by remember(word.id) { mutableStateOf<PronunciationResult?>(null) }
+        var voiceErrorVi by remember(word.id) { mutableStateOf<String?>(null) }
+        var activeRecognizer by remember { mutableStateOf<SpeechRecognizer?>(null) }
+
+        // Clean up SpeechRecognizer when word changes or composable leaves composition
+        DisposableEffect(word.id) {
+            onDispose {
+                activeRecognizer?.destroy()
+                activeRecognizer = null
+                isListeningVoice = false
+            }
+        }
+
+        val startVoiceCheck = {
+            voiceErrorVi = null
+            pronunciationResult = null
+            activeRecognizer?.destroy()
+            isListeningVoice = true
+            activeRecognizer = ApexPronunciationEvaluator.startListening(
+                context = context,
+                targetWord = word.word,
+                pronunciationFocusVi = word.pronunciationFocusVi,
+                onReady = { isListeningVoice = true },
+                onResult = { result ->
+                    isListeningVoice = false
+                    pronunciationResult = result
+                    if (!result.isStrongPass) {
+                        onAddToSrs(word.id)
+                    }
+                },
+                onError = { err ->
+                    isListeningVoice = false
+                    voiceErrorVi = err
+                }
+            )
+            if (activeRecognizer == null) {
+                isListeningVoice = false
+            }
+        }
+
+        val audioPermissionLauncher = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestPermission()
+        ) { granted ->
+            if (granted) {
+                startVoiceCheck()
+            } else {
+                voiceErrorVi = "Vui lòng cấp quyền Micro để Trợ giảng AI lắng nghe và chấm điểm phát âm của bạn."
+            }
+        }
+
+        val reduceMotion = shouldReduceMotion()
+        val haptic = LocalHapticFeedback.current
+        val swipeScope = rememberCoroutineScope()
+        val dragOffsetX = remember(word.id) { Animatable(0f) }
+
+        val flipRotation by animateFloatAsState(
+            targetValue = if (isFlipped) 180f else 0f,
+            animationSpec = tween(
+                durationMillis = if (reduceMotion) 0 else 260,
+                easing = FastOutSlowInEasing
+            ),
+            label = "flashcard_3d_flip"
+        )
+
+        val swipeThresholdPx = 155f
+        val swipeProgress = (dragOffsetX.value / swipeThresholdPx).coerceIn(-1f, 1f)
+
         // Carousel Counter + SRS Action Row
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -196,7 +459,7 @@ fun FlashcardSubTab(
                 border = BorderStroke(1.dp, CardBorderSoft)
             ) {
                 Text(
-                    text = "Thẻ ${safeIndex + 1} / ${words.size} • ${word.cefrLevel}",
+                    text = "Thẻ ${effectiveIndex + 1} / ${filteredWords.size} • ${word.cefrLevel} • M${word.moduleId}",
                     style = MaterialTheme.typography.labelMedium.copy(
                         fontFamily = PlusJakartaSansFontFamily,
                         fontWeight = FontWeight.Bold
@@ -236,11 +499,58 @@ fun FlashcardSubTab(
             }
         }
 
-        // Smooth 3D Flip Flashcard Container
+        // Smooth 3D Flip + Horizontal Swipe Gesture Flashcard Container
+        // Swipe Right -> "Đã thuộc" (Emerald highlight), Swipe Left -> "Ôn lại SRS" (Amber highlight)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
+                .pointerInput(word.id, filteredWords.size, effectiveIndex) {
+                    detectHorizontalDragGestures(
+                        onDragEnd = {
+                            val currentOffset = dragOffsetX.value
+                            if (currentOffset > swipeThresholdPx) {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                swipeScope.launch {
+                                    dragOffsetX.animateTo(520f, tween(if (reduceMotion) 0 else 170))
+                                    onWordFlipped(word)
+                                    onShowMessage("✓ Đã thuộc \"${word.word}\"!")
+                                    selectDisplayIndex((effectiveIndex + 1) % filteredWords.size)
+                                }
+                            } else if (currentOffset < -swipeThresholdPx) {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                swipeScope.launch {
+                                    dragOffsetX.animateTo(-520f, tween(if (reduceMotion) 0 else 170))
+                                    onAddToSrs(word.id)
+                                    onShowMessage("↺ Đã đưa \"${word.word}\" vào hàng chờ ôn lại SRS!")
+                                    selectDisplayIndex((effectiveIndex + 1) % filteredWords.size)
+                                }
+                            } else {
+                                swipeScope.launch {
+                                    dragOffsetX.animateTo(
+                                        0f,
+                                        spring(dampingRatio = 0.65f, stiffness = Spring.StiffnessMedium)
+                                    )
+                                }
+                            }
+                        },
+                        onDragCancel = {
+                            swipeScope.launch {
+                                dragOffsetX.animateTo(
+                                    0f,
+                                    spring(dampingRatio = 0.65f, stiffness = Spring.StiffnessMedium)
+                                )
+                            }
+                        },
+                        onHorizontalDrag = { _, dragAmount ->
+                            swipeScope.launch {
+                                dragOffsetX.snapTo((dragOffsetX.value + dragAmount).coerceIn(-420f, 420f))
+                            }
+                        }
+                    )
+                }
                 .graphicsLayer {
+                    translationX = dragOffsetX.value
+                    rotationZ = if (reduceMotion) 0f else (dragOffsetX.value / 28f).coerceIn(-8f, 8f)
                     rotationY = flipRotation
                     cameraDistance = 12f * density
                 }
@@ -261,7 +571,6 @@ fun FlashcardSubTab(
                     onShowMessage = onShowMessage,
                     onFlip = {
                         isFlipped = true
-                        onWordFlipped(word)
                     },
                     onSpeak = { accent -> ttsController.speak(word.word, accent) },
                     onToggleVoiceCheck = {
@@ -290,11 +599,65 @@ fun FlashcardSubTab(
                 ) {
                     FlashcardBackFace(
                         word = word,
+                        isLearnedToday = dailyLearnedWordIds.contains(word.id),
+                        inSrs = srsWordIds.contains(word.id),
+                        onMarkLearned = { onWordFlipped(word) },
+                        onAddToSrs = { onAddToSrs(word.id) },
                         onFlipBack = { isFlipped = false },
                         onSpeakExample = { ttsController.speak(word.exampleEn, EnglishAccent.UK) }
                     )
                 }
             }
+
+            // Live Emerald / Amber Swipe Action Highlight Overlay
+            if (abs(swipeProgress) > 0.14f) {
+                val isRight = swipeProgress > 0f
+                val badgeAlpha = abs(swipeProgress).coerceIn(0.2f, 0.96f)
+                val badgeColor = if (isRight) EmeraldSuccess else GoldMastery
+                val badgeBg = if (isRight) EmeraldSuccessLight else GoldMasteryLight
+                val badgeText = if (isRight) "✓ Đã thuộc" else "↺ Ôn lại SRS"
+
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = badgeBg.copy(alpha = badgeAlpha),
+                    border = BorderStroke(2.dp, badgeColor),
+                    shadowElevation = 6.dp,
+                    modifier = Modifier
+                        .align(if (isRight) Alignment.TopStart else Alignment.TopEnd)
+                        .padding(16.dp)
+                        .graphicsLayer {
+                            if (flipRotation > 90f) rotationY = 180f
+                        }
+                ) {
+                    Text(
+                        text = badgeText,
+                        style = MaterialTheme.typography.titleSmall.copy(
+                            fontFamily = PlusJakartaSansFontFamily,
+                            fontWeight = FontWeight.ExtraBold
+                        ),
+                        color = if (isRight) EmeraldSuccess else GoldOnContainer,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                    )
+                }
+            }
+        }
+
+        // Concise Swipe Gesture Hint Row
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "← Vuốt trái: Ôn lại SRS",
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = GoldOnContainer
+            )
+            Text(
+                text = "Vuốt phải: Đã thuộc →",
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = EmeraldSuccess
+            )
         }
 
         // Previous / Next Card Navigation + Quick CTA to AI Sentence Builder
@@ -304,7 +667,7 @@ fun FlashcardSubTab(
             verticalAlignment = Alignment.CenterVertically
         ) {
             OutlinedButton(
-                onClick = { onSelectIndex(if (safeIndex > 0) safeIndex - 1 else words.lastIndex) },
+                onClick = { selectDisplayIndex(if (effectiveIndex > 0) effectiveIndex - 1 else filteredWords.lastIndex) },
                 shape = RoundedCornerShape(16.dp),
                 border = BorderStroke(1.dp, CardBorderSoft),
                 contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
@@ -331,6 +694,7 @@ fun FlashcardSubTab(
                 modifier = Modifier
                     .weight(1f)
                     .minimumInteractiveComponentSize()
+                    .tactilePress()
                     .testTag("flashcard_build_sentence_cta")
             ) {
                 Icon(
@@ -346,7 +710,7 @@ fun FlashcardSubTab(
             }
 
             OutlinedButton(
-                onClick = { onSelectIndex((safeIndex + 1) % words.size) },
+                onClick = { selectDisplayIndex((effectiveIndex + 1) % filteredWords.size) },
                 shape = RoundedCornerShape(16.dp),
                 border = BorderStroke(1.dp, CardBorderSoft),
                 contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
@@ -360,6 +724,199 @@ fun FlashcardSubTab(
                     tint = ElectricIndigo,
                     modifier = Modifier.size(18.dp)
                 )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun VocabSearchAndFilterCard(
+    rawQuery: String,
+    onQueryChange: (String) -> Unit,
+    statusFilter: VocabStatusFilter,
+    onSelectStatus: (VocabStatusFilter) -> Unit,
+    selectedModuleFilter: Int?,
+    activeModuleId: Int,
+    showModuleStrip: Boolean,
+    onToggleModuleStrip: () -> Unit,
+    onSelectModule: (Int?) -> Unit,
+    resultCount: Int,
+    totalCount: Int
+) {
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = CardWhite,
+        border = BorderStroke(1.dp, CardBorderSoft),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("vocab_search_filter_bar")
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            OutlinedTextField(
+                value = rawQuery,
+                onValueChange = onQueryChange,
+                singleLine = true,
+                placeholder = {
+                    Text(
+                        text = "Tìm từ, nghĩa Việt, ví dụ ($totalCount từ)...",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = InkMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Rounded.Search,
+                        contentDescription = null,
+                        tint = ElectricIndigo,
+                        modifier = Modifier.size(18.dp)
+                    )
+                },
+                trailingIcon = {
+                    if (rawQuery.isNotBlank()) {
+                        IconButton(onClick = { onQueryChange("") }) {
+                            Icon(
+                                imageVector = Icons.Rounded.Close,
+                                contentDescription = "Xóa từ khóa",
+                                tint = InkMuted,
+                                modifier = Modifier.size(17.dp)
+                            )
+                        }
+                    }
+                },
+                shape = RoundedCornerShape(14.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = ElectricIndigo,
+                    unfocusedBorderColor = CardBorderSoft,
+                    focusedContainerColor = SurfaceCanvas,
+                    unfocusedContainerColor = SurfaceCanvas
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("vocab_search_input")
+            )
+
+            // Status Filter Chips + Module Filter Toggle Pill
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                VocabStatusFilter.entries.forEach { status ->
+                    val selected = status == statusFilter
+                    val chipBg = when {
+                        selected && status == VocabStatusFilter.LEARNED -> EmeraldSuccess
+                        selected && status == VocabStatusFilter.REVIEWING -> GoldMastery
+                        selected -> ElectricIndigo
+                        else -> SurfaceCanvas
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(50),
+                        color = chipBg,
+                        border = BorderStroke(
+                            1.dp,
+                            if (selected) chipBg else CardBorderSoft
+                        ),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .clickable { onSelectStatus(status) }
+                            .testTag("vocab_status_${status.name.lowercase()}")
+                    ) {
+                        Text(
+                            text = status.labelVi,
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = if (selected) Color.White else InkPrimary,
+                            maxLines = 1,
+                            softWrap = false,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                        )
+                    }
+                }
+
+                // Module Filter Toggle Pill
+                val moduleLabel = when (selectedModuleFilter) {
+                    null -> "Module: Tất cả"
+                    else -> "Module $selectedModuleFilter"
+                }
+                val isCustomModule = selectedModuleFilter != activeModuleId
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = if (showModuleStrip || isCustomModule) ElectricIndigoLight else SurfaceCanvas,
+                    border = BorderStroke(
+                        1.dp,
+                        if (showModuleStrip || isCustomModule) ElectricIndigo else CardBorderSoft
+                    ),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .clickable(onClick = onToggleModuleStrip)
+                        .testTag("vocab_module_filter_toggle")
+                ) {
+                    Text(
+                        text = "$moduleLabel ($resultCount)",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = ElectricIndigo,
+                        maxLines = 1,
+                        softWrap = false,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                    )
+                }
+            }
+
+            // Expandable Module 1–12 Selector Strip
+            AnimatedVisibility(visible = showModuleStrip) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    val allSelected = selectedModuleFilter == null
+                    Surface(
+                        shape = RoundedCornerShape(50),
+                        color = if (allSelected) ElectricIndigo else SurfaceCanvas,
+                        border = BorderStroke(1.dp, if (allSelected) ElectricIndigo else CardBorderSoft),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .clickable { onSelectModule(null) }
+                            .testTag("vocab_module_all")
+                    ) {
+                        Text(
+                            text = "Tất cả (1–12)",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = if (allSelected) Color.White else InkPrimary,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                        )
+                    }
+
+                    (1..12).forEach { modId ->
+                        val selected = selectedModuleFilter == modId
+                        Surface(
+                            shape = RoundedCornerShape(50),
+                            color = if (selected) ElectricIndigo else SurfaceCanvas,
+                            border = BorderStroke(1.dp, if (selected) ElectricIndigo else CardBorderSoft),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(50))
+                                .clickable { onSelectModule(modId) }
+                                .testTag("vocab_module_$modId")
+                        ) {
+                            Text(
+                                text = "M$modId",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = if (selected) Color.White else InkPrimary,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                            )
+                        }
+                    }
+                }
             }
         }
     }
@@ -381,21 +938,16 @@ private fun FlashcardFrontFace(
     onSpeak: (EnglishAccent) -> Unit,
     onToggleVoiceCheck: () -> Unit
 ) {
-    Surface(
+    GlassSurface(
         modifier = Modifier
             .fillMaxWidth()
-            .shadow(
-                elevation = 14.dp,
-                shape = RoundedCornerShape(26.dp),
-                ambientColor = ElectricIndigo.copy(alpha = 0.14f),
-                spotColor = CyanGlow.copy(alpha = 0.22f)
-            )
             .clip(RoundedCornerShape(26.dp))
             .clickable(onClick = onFlip)
             .testTag("flashcard_front"),
         shape = RoundedCornerShape(26.dp),
-        color = CardWhite,
-        border = BorderStroke(1.5.dp, ElectricIndigo.copy(alpha = 0.18f))
+        solidColor = CardWhite,
+        solidBorder = BorderStroke(1.5.dp, ElectricIndigo.copy(alpha = 0.18f)),
+        solidShadowElevation = 6.dp
     ) {
         Column(
             modifier = Modifier
@@ -754,24 +1306,24 @@ private fun AccentAudioButton(
 @Composable
 private fun FlashcardBackFace(
     word: VocabWordItem,
+    isLearnedToday: Boolean,
+    inSrs: Boolean,
+    onMarkLearned: () -> Unit,
+    onAddToSrs: () -> Unit,
     onFlipBack: () -> Unit,
     onSpeakExample: () -> Unit
 ) {
-    Surface(
+    GlassSurface(
         modifier = Modifier
             .fillMaxWidth()
-            .shadow(
-                elevation = 14.dp,
-                shape = RoundedCornerShape(26.dp),
-                ambientColor = ElectricIndigo.copy(alpha = 0.14f),
-                spotColor = CyanGlow.copy(alpha = 0.22f)
-            )
             .clip(RoundedCornerShape(26.dp))
             .clickable(onClick = onFlipBack)
             .testTag("flashcard_back"),
         shape = RoundedCornerShape(26.dp),
-        color = CardWhite,
-        border = BorderStroke(1.5.dp, CyanGlow.copy(alpha = 0.45f))
+        solidColor = CardWhite,
+        solidBorder = BorderStroke(1.5.dp, CyanGlow.copy(alpha = 0.45f)),
+        accentTint = CyanGlow,
+        solidShadowElevation = 6.dp
     ) {
         Column(
             modifier = Modifier
@@ -911,6 +1463,66 @@ private fun FlashcardBackFace(
                             color = InkPrimary
                         )
                     }
+                }
+            }
+
+            // Mastery confirmation action row (triggers automatic daily vocabulary KPI counter)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedButton(
+                    onClick = onAddToSrs,
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.dp, if (inSrs) GoldMastery else CardBorderSoft),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                    modifier = Modifier
+                        .minimumInteractiveComponentSize()
+                        .testTag("flashcard_back_srs_btn")
+                ) {
+                    Icon(
+                        imageVector = if (inSrs) Icons.Rounded.BookmarkAdded else Icons.Rounded.BookmarkAdd,
+                        contentDescription = null,
+                        tint = if (inSrs) GoldOnContainer else InkSecondary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(5.dp))
+                    Text(
+                        text = if (inSrs) "Đang ôn SRS" else "Ôn lại SRS",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (inSrs) GoldOnContainer else InkSecondary,
+                        maxLines = 1,
+                        softWrap = false
+                    )
+                }
+
+                Button(
+                    onClick = onMarkLearned,
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isLearnedToday) EmeraldSuccessLight else EmeraldSuccess,
+                        contentColor = if (isLearnedToday) EmeraldSuccess else Color.White
+                    ),
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .minimumInteractiveComponentSize()
+                        .tactilePress()
+                        .testTag("flashcard_mark_learned_btn")
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.CheckCircle,
+                        contentDescription = null,
+                        modifier = Modifier.size(17.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = if (isLearnedToday) "✓ Đã nhớ từ này" else "Đã thuộc / Nhớ từ",
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                        maxLines = 1,
+                        softWrap = false
+                    )
                 }
             }
 

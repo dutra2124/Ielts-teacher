@@ -23,6 +23,7 @@ data class DiligenceDashboardSnapshot(
     val skillProgress: List<SkillBandProgress>,
     val milestones: List<JourneyMilestone>,
     val weakAreaCoaching: WeakAreaCoaching,
+    val topWeakQuestionTypes: List<WeakQuestionDiagnostic>,
     val voiceQuotes: List<CoachVoiceQuote>,
     val isHighDiligence: Boolean
 )
@@ -71,6 +72,14 @@ data class WeakAreaCoaching(
     val focusNoteVi: String
 )
 
+data class WeakQuestionDiagnostic(
+    val id: String,
+    val skill: PracticeSkill,
+    val questionTypeVi: String,
+    val badgeVi: String,
+    val quickPracticeFocusVi: String
+)
+
 data class CoachVoiceQuote(
     val id: String,
     val badgeVi: String,
@@ -83,35 +92,34 @@ object ProgressAnalyticsEngine {
     private const val DAILY_TARGET_MINUTES = 30
 
     fun compute(state: ApexIeltsUiState): DiligenceDashboardSnapshot {
-        val totalHabits = DefaultHabitData.dailyChecklist.size.coerceAtLeast(1)
-        val completedTodayHabits = state.completedHabitIds.count { id ->
-            DefaultHabitData.dailyChecklist.any { it.id == id }
-        }
-        val dailyGoalRate = ((completedTodayHabits.toFloat() / totalHabits) * 100f).roundToInt()
+        val autoKpi = state.autoKpi
+        val completedTodayHabits = autoKpi.completedCriteriaCount
+        val dailyGoalRate = autoKpi.overallPercent
 
         val streakScore = ((state.streakDays.coerceAtMost(14) / 14f) * 100f)
             .roundToInt()
             .coerceIn(18, 100)
 
-        val vocabReviewed = state.learnedVocabIds.size + state.srsWordIds.size
+        val vocabReviewed = state.learnedVocabIds.size + state.srsWordIds.size + autoKpi.dailyWordsLearned
         val vocabScore = ((vocabReviewed.coerceAtLeast(3) / 18f) * 100f)
             .roundToInt()
             .coerceIn(22, 100)
 
         val weeklyBars = buildWeeklyBars(state, completedTodayHabits)
-        val weeklyMinutesTotal = weeklyBars.sumOf { it.minutes }
+        val weeklyMinutesTotal = weeklyBars.sumOf { it.minutes } + autoKpi.dailyStudyMinutes
         val minutesScore = ((weeklyMinutesTotal.toFloat() / (DAILY_TARGET_MINUTES * 5f)) * 100f)
             .roundToInt()
             .coerceIn(20, 100)
 
+        val todayMinutes = maxOf(state.dailySelfStudyMinutes, autoKpi.dailyStudyMinutes)
         val diligenceScore = (
             streakScore * 0.25f +
-                dailyGoalRate.coerceAtLeast(if (state.dailySelfStudyMinutes > 0) 45 else 25) * 0.25f +
+                dailyGoalRate.coerceAtLeast(if (todayMinutes > 0) 45 else 25) * 0.25f +
                 vocabScore * 0.25f +
                 minutesScore * 0.25f
             ).roundToInt().coerceIn(20, 100)
 
-        val isHighDiligence = diligenceScore >= 68 || state.streakDays >= 5 || completedTodayHabits >= totalHabits
+        val isHighDiligence = diligenceScore >= 68 || state.streakDays >= 5 || autoKpi.isAllDailyKpiMet
 
         val gradeLabelVi = when {
             diligenceScore >= 85 -> "Siêu chăm chỉ • Chuẩn phong độ Band 8.5+"
@@ -125,6 +133,7 @@ object ProgressAnalyticsEngine {
         val weakestSkill = skillProgress.minByOrNull { it.currentBand } ?: skillProgress.first()
         val strongestSkill = skillProgress.maxByOrNull { it.currentBand } ?: skillProgress.first()
         val weakAreaCoaching = buildWeakAreaCoaching(weakestSkill, state)
+        val topWeakQuestionTypes = buildTopWeakQuestionTypes(state, skillProgress)
         val milestones = buildJourneyMilestones(state, strongestSkill)
         val voiceQuotes = buildPersonalizedQuotes(
             state = state,
@@ -148,6 +157,7 @@ object ProgressAnalyticsEngine {
             skillProgress = skillProgress,
             milestones = milestones,
             weakAreaCoaching = weakAreaCoaching,
+            topWeakQuestionTypes = topWeakQuestionTypes,
             voiceQuotes = voiceQuotes,
             isHighDiligence = isHighDiligence
         )
@@ -358,6 +368,99 @@ object ProgressAnalyticsEngine {
                 focusNoteVi = "Trọng tâm từ Dashboard: Speaking Part 2–3 Fluency & Academic Hedging"
             )
         }
+    }
+
+    private fun buildTopWeakQuestionTypes(
+        state: ApexIeltsUiState,
+        skillProgress: List<SkillBandProgress>
+    ): List<WeakQuestionDiagnostic> {
+        val allExamsById = (state.authenticExams + state.customExams).associateBy { it.id }
+        val wrongByType = linkedMapOf<Pair<ExamQuestionSkill, ExamQuestionType>, Int>()
+
+        state.examHistory.take(8).forEach { attempt ->
+            val paper = allExamsById[attempt.examId] ?: return@forEach
+            paper.questions.forEach { q ->
+                val userAns = attempt.objectiveAnswers[q.id]?.trim().orEmpty()
+                val isCorrect = userAns.isNotBlank() && q.acceptableAnswers.any {
+                    it.trim().equals(userAns, ignoreCase = true)
+                }
+                if (!isCorrect) {
+                    val key = q.skill to q.type
+                    wrongByType[key] = (wrongByType[key] ?: 0) + 1
+                }
+            }
+        }
+
+        val detected = wrongByType.entries
+            .sortedByDescending { it.value }
+            .take(2)
+            .mapIndexed { idx, (key, wrongCount) ->
+                val (qSkill, qType) = key
+                val practiceSkill = when (qSkill) {
+                    ExamQuestionSkill.LISTENING -> PracticeSkill.LISTENING
+                    ExamQuestionSkill.READING -> PracticeSkill.READING
+                }
+                val typeTitle = when (qType) {
+                    ExamQuestionType.TFNG -> "Reading: True / False / Not Given"
+                    ExamQuestionType.MCQ -> if (qSkill == ExamQuestionSkill.LISTENING) {
+                        "Listening: Trắc nghiệm bẫy đổi ý"
+                    } else {
+                        "Reading: Multiple Choice suy luận"
+                    }
+                    ExamQuestionType.GAP_FILL -> if (qSkill == ExamQuestionSkill.LISTENING) {
+                        "Listening: Điền từ & nối âm Part 4"
+                    } else {
+                        "Reading: Điền từ (Summary Completion)"
+                    }
+                }
+                WeakQuestionDiagnostic(
+                    id = "weak_detected_${idx}_${qSkill.name}_${qType.name}",
+                    skill = practiceSkill,
+                    questionTypeVi = typeTitle,
+                    badgeVi = "Sai $wrongCount câu từ Chữa đề",
+                    quickPracticeFocusVi = "Luyện nhanh 5 phút: Khắc phục $typeTitle (phát hiện $wrongCount lỗi từ Chữa đề)"
+                )
+            }
+            .toMutableList()
+
+        // Fill up to 2 diagnostics using the lowest-scoring skills if exam history has fewer than 2 error types
+        val sortedWeakSkills = skillProgress.sortedBy { it.currentBand }
+        for (skillItem in sortedWeakSkills) {
+            if (detected.size >= 2) break
+            if (detected.any { it.skill == skillItem.skill }) continue
+            val fallback = when (skillItem.skill) {
+                PracticeSkill.READING -> WeakQuestionDiagnostic(
+                    id = "weak_fallback_reading",
+                    skill = PracticeSkill.READING,
+                    questionTypeVi = "Reading: True / False / Not Given",
+                    badgeVi = "Ưu tiên gỡ điểm",
+                    quickPracticeFocusVi = "Luyện nhanh 5 phút: Reading True / False / Not Given & Paraphrasing"
+                )
+                PracticeSkill.WRITING -> WeakQuestionDiagnostic(
+                    id = "weak_fallback_writing",
+                    skill = PracticeSkill.WRITING,
+                    questionTypeVi = "Writing: Task 2 Coherence & C1 Lexis",
+                    badgeVi = "Ưu tiên gỡ điểm",
+                    quickPracticeFocusVi = "Luyện nhanh 5 phút: Writing Task 2 Coherence & nâng cấp từ vựng C1"
+                )
+                PracticeSkill.LISTENING -> WeakQuestionDiagnostic(
+                    id = "weak_fallback_listening",
+                    skill = PracticeSkill.LISTENING,
+                    questionTypeVi = "Listening: Bẫy đổi ý (Distractors)",
+                    badgeVi = "Ưu tiên gỡ điểm",
+                    quickPracticeFocusVi = "Luyện nhanh 5 phút: Listening bắt bẫy Distractors & Smart Dictation"
+                )
+                PracticeSkill.SPEAKING -> WeakQuestionDiagnostic(
+                    id = "weak_fallback_speaking",
+                    skill = PracticeSkill.SPEAKING,
+                    questionTypeVi = "Speaking: Mở rộng ý Part 3 Hedging",
+                    badgeVi = "Ưu tiên gỡ điểm",
+                    quickPracticeFocusVi = "Luyện nhanh 5 phút: Speaking Part 3 Fluency & Academic Hedging"
+                )
+            }
+            detected.add(fallback)
+        }
+        return detected.take(2)
     }
 
     private fun buildJourneyMilestones(

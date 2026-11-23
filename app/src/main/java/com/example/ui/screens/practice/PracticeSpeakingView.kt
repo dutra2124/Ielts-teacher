@@ -71,11 +71,13 @@ import com.example.ai.SpeakingAiUiState
 import com.example.data.SpeakingPart
 import com.example.data.SpeakingPracticePack
 import com.example.data.TeacherMood
+import androidx.compose.runtime.mutableFloatStateOf
 import com.example.speech.ApexPronunciationEvaluator
 import com.example.speech.ApexTtsController
 import com.example.speech.EnglishAccent
 import com.example.ui.components.AnimatedAudioWaveform
 import com.example.ui.components.AnimatedTeacher
+import com.example.ui.components.AudioAbRepeatControlBar
 import com.example.ui.theme.CardBorderSoft
 import com.example.ui.theme.CardWhite
 import com.example.ui.theme.EmeraldSuccess
@@ -109,6 +111,56 @@ fun PracticeSpeakingView(
     var selectedPart by remember(pack.moduleId) { mutableStateOf(SpeakingPart.PART_2) }
     val activePrompt = remember(pack, selectedPart) {
         pack.prompts.firstOrNull { it.part == selectedPart } ?: pack.prompts.first()
+    }
+
+    // Shadowing audio playback lines (Prompt + Cue bullets, or AI Band 8.5+ model sentences when available)
+    val shadowingLines = remember(activePrompt, aiState) {
+        val modelAnswer = (aiState as? SpeakingAiUiState.Success)
+            ?.result
+            ?.upgradedBand85Answer
+            ?.trim()
+            .orEmpty()
+        if (modelAnswer.isNotBlank()) {
+            modelAnswer.split(Regex("(?<=[.!?])\\s+"))
+                .map { it.trim() }
+                .filter { it.isNotBlank() }
+                .ifEmpty { listOf(modelAnswer) }
+        } else {
+            buildList {
+                add(activePrompt.promptEn)
+                addAll(activePrompt.cueBulletsEn)
+            }.filter { it.isNotBlank() }
+        }
+    }
+    var playbackSpeed by remember { mutableFloatStateOf(1.0f) }
+    var isShadowingPlaying by remember(selectedPart, pack.moduleId) { mutableStateOf(false) }
+    var activeShadowLineIdx by remember(selectedPart, pack.moduleId, shadowingLines) { mutableIntStateOf(0) }
+    var loopPointA by remember(selectedPart, pack.moduleId, shadowingLines) { mutableStateOf<Int?>(null) }
+    var loopPointB by remember(selectedPart, pack.moduleId, shadowingLines) { mutableStateOf<Int?>(null) }
+    val isAbLoopActive = loopPointA != null && loopPointB != null && loopPointA!! <= loopPointB!!
+
+    fun startShadowingAt(
+        startIdx: Int,
+        speed: Float = playbackSpeed,
+        pointA: Int? = loopPointA,
+        pointB: Int? = loopPointB
+    ) {
+        if (shadowingLines.isEmpty()) return
+        val clamped = startIdx.coerceIn(0, shadowingLines.lastIndex)
+        isShadowingPlaying = true
+        ttsController.speakSequence(
+            lines = shadowingLines,
+            startIndex = clamped,
+            accent = EnglishAccent.UK,
+            speechRate = speed,
+            loopStartIndex = pointA,
+            loopEndIndex = pointB,
+            onLineStarted = { idx -> activeShadowLineIdx = idx },
+            onComplete = {
+                isShadowingPlaying = false
+                activeShadowLineIdx = 0
+            }
+        )
     }
 
     // Part 2 1-minute (60s) countdown timer
@@ -177,7 +229,10 @@ fun PracticeSpeakingView(
     }
 
     DisposableEffect(Unit) {
-        onDispose { stopRecognition() }
+        onDispose {
+            stopRecognition()
+            ttsController.stop()
+        }
     }
 
     Column(
@@ -263,21 +318,93 @@ fun PracticeSpeakingView(
 
                     Surface(
                         shape = RoundedCornerShape(50),
-                        color = SurfaceCanvas,
+                        color = if (isShadowingPlaying) RoseAlert.copy(alpha = 0.14f) else SurfaceCanvas,
+                        border = BorderStroke(
+                            1.dp,
+                            if (isShadowingPlaying) RoseAlert.copy(alpha = 0.5f) else CardBorderSoft
+                        ),
                         modifier = Modifier
                             .clip(RoundedCornerShape(50))
-                            .clickable { ttsController.speak(activePrompt.promptEn, EnglishAccent.UK) }
+                            .clickable {
+                                if (isShadowingPlaying) {
+                                    ttsController.stop()
+                                    isShadowingPlaying = false
+                                } else {
+                                    val startIdx = if (isAbLoopActive && loopPointA != null &&
+                                        (activeShadowLineIdx < loopPointA!! || activeShadowLineIdx > loopPointB!!)
+                                    ) {
+                                        loopPointA!!
+                                    } else {
+                                        activeShadowLineIdx
+                                    }
+                                    startShadowingAt(startIdx)
+                                }
+                            }
+                            .testTag("speaking_shadow_play_toggle")
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp)
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
                         ) {
-                            Icon(Icons.AutoMirrored.Rounded.VolumeUp, contentDescription = "Nghe câu hỏi", tint = PracticeTealDark, modifier = Modifier.size(14.dp))
-                            Text("Nghe đề", style = MaterialTheme.typography.labelSmall, color = PracticeTealDark)
+                            Icon(
+                                imageVector = if (isShadowingPlaying) Icons.Rounded.Stop else Icons.AutoMirrored.Rounded.VolumeUp,
+                                contentDescription = if (isShadowingPlaying) "Dừng nghe" else "Nghe Shadowing",
+                                tint = if (isShadowingPlaying) RoseAlert else PracticeTealDark,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Text(
+                                text = if (isShadowingPlaying) {
+                                    "Dừng (${activeShadowLineIdx + 1}/${shadowingLines.size})"
+                                } else {
+                                    "Nghe mẫu (${shadowingLines.size} câu)"
+                                },
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = if (isShadowingPlaying) RoseAlert else PracticeTealDark
+                            )
                         }
                     }
                 }
+
+                // Speaking Shadowing Audio Speed (0.75x / 1.0x / 1.25x) & A–B Repeat Loop Controls
+                AudioAbRepeatControlBar(
+                    playbackSpeed = playbackSpeed,
+                    onSelectSpeed = { speed ->
+                        playbackSpeed = speed
+                        if (isShadowingPlaying) {
+                            startShadowingAt(activeShadowLineIdx, speed = speed)
+                        }
+                    },
+                    pointALabel = loopPointA?.let { "Câu ${it + 1}" },
+                    pointBLabel = loopPointB?.let { "Câu ${it + 1}" },
+                    isLoopActive = isAbLoopActive,
+                    onSetPointA = {
+                        val newA = activeShadowLineIdx
+                        val newB = loopPointB?.takeIf { it >= newA }
+                        loopPointA = newA
+                        loopPointB = newB
+                        ttsController.updateSequenceLoop(newA, newB)
+                    },
+                    onSetPointB = {
+                        val anchorA = loopPointA ?: 0
+                        val cur = activeShadowLineIdx
+                        val (newA, newB) = if (cur < anchorA) cur to anchorA else anchorA to cur
+                        loopPointA = newA
+                        loopPointB = newB
+                        if (isShadowingPlaying) {
+                            ttsController.updateSequenceLoop(newA, newB)
+                        } else {
+                            startShadowingAt(newA, pointA = newA, pointB = newB)
+                        }
+                    },
+                    onClearLoop = {
+                        loopPointA = null
+                        loopPointB = null
+                        ttsController.updateSequenceLoop(null, null)
+                    },
+                    accentColor = PracticeTeal,
+                    testTagPrefix = "speaking"
+                )
 
                 Text(
                     text = activePrompt.promptEn,
@@ -641,7 +768,14 @@ fun PracticeSpeakingView(
             is SpeakingAiUiState.Success -> {
                 SpeakingEvaluationCard(
                     evaluation = aiState.result,
-                    onSpeakSample = { ttsController.speak(aiState.result.upgradedBand85Answer, EnglishAccent.UK) }
+                    onSpeakSample = {
+                        if (isShadowingPlaying) {
+                            ttsController.stop()
+                            isShadowingPlaying = false
+                        } else {
+                            startShadowingAt(0)
+                        }
+                    }
                 )
             }
         }

@@ -9,6 +9,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.mutableStateOf
 import com.example.ai.configureAppCheck
+import com.example.data.AutoKpiInteractionBus
 import com.example.data.importer.DocumentTextExtractor
 import com.example.notifications.ApexNotificationHelper
 import com.example.ui.ApexIeltsApp
@@ -34,6 +35,11 @@ class MainActivity : ComponentActivity() {
                 onThemeDarknessChanged = { isDark -> applySystemBarsForTheme(isDark) }
             )
         }
+    }
+
+    override fun onUserInteraction() {
+        super.onUserInteraction()
+        AutoKpiInteractionBus.notifyInteraction()
     }
 
     private fun applySystemBarsForTheme(isDark: Boolean) {

@@ -1,6 +1,11 @@
 package com.example.ui.components
 
 import android.Manifest
+import android.app.Activity
+import android.content.Intent
+import android.media.Ringtone
+import android.media.RingtoneManager
+import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -23,15 +28,22 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowForwardIos
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.MenuBook
+import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.NotificationsNone
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Quiz
 import androidx.compose.material.icons.rounded.Send
+import androidx.compose.material.icons.rounded.Stop
+import androidx.compose.material.icons.rounded.VolumeOff
+import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -43,6 +55,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -53,9 +67,11 @@ import androidx.compose.material3.TimePickerDefaults
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -70,11 +86,16 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
+import com.example.data.NotificationCenterState
 import com.example.data.NotificationPreferences
+import com.example.data.NotificationSoundPreset
 import com.example.data.ReminderSlot
 import com.example.data.ReminderTone
 import com.example.data.WeekdayItem
 import com.example.notifications.ApexNotificationHelper
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import com.example.ui.theme.CardBorderSoft
 import com.example.ui.theme.CardSurfaceTinted
 import com.example.ui.theme.CardWhite
@@ -107,7 +128,10 @@ private enum class SlotEditorTarget { VOCAB, TEST }
 @Composable
 fun StudyScheduleSettingsSection(
     prefs: NotificationPreferences,
+    notificationCenterState: NotificationCenterState = NotificationCenterState(),
     onMasterEnabledChange: (Boolean) -> Unit,
+    onSoundEnabledChange: (Boolean) -> Unit = {},
+    onSelectNotificationSound: (uriString: String?, title: String) -> Unit = { _, _ -> },
     onSaveVocabSlot: (existingId: String?, hour: Int, minute: Int, labelVi: String) -> Unit,
     onToggleVocabSlot: (String) -> Unit,
     onDeleteVocabSlot: (String) -> Unit,
@@ -121,6 +145,7 @@ fun StudyScheduleSettingsSection(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     var hasOsPermission by remember {
         mutableStateOf(ApexNotificationHelper.hasNotificationPermission(context))
     }
@@ -133,6 +158,71 @@ fun StudyScheduleSettingsSection(
     var editingSlot by remember { mutableStateOf<ReminderSlot?>(null) }
     var isCreatingNew by remember { mutableStateOf(false) }
     var editorTarget by remember { mutableStateOf(SlotEditorTarget.VOCAB) }
+    var showSoundPickerDialog by remember { mutableStateOf(false) }
+
+    // Short ~2-second sound preview state with automatic cleanup on dispose
+    var activePreviewRingtone by remember { mutableStateOf<Ringtone?>(null) }
+    var activePreviewKey by remember { mutableStateOf<String?>(null) }
+    var previewStopJob by remember { mutableStateOf<Job?>(null) }
+
+    val stopPreviewSound: () -> Unit = {
+        previewStopJob?.cancel()
+        previewStopJob = null
+        runCatching { activePreviewRingtone?.stop() }
+        activePreviewRingtone = null
+        activePreviewKey = null
+    }
+
+    val playPreviewSound: (soundKey: String, uriString: String?) -> Unit = { soundKey, uriString ->
+        if (activePreviewKey == soundKey && activePreviewRingtone != null) {
+            stopPreviewSound()
+        } else {
+            stopPreviewSound()
+            val resolvedUri = ApexNotificationHelper.resolveSoundUri(context, uriString)
+            val ringtone = runCatching {
+                resolvedUri?.let { RingtoneManager.getRingtone(context, it) }
+            }.getOrNull()
+            if (ringtone != null) {
+                activePreviewRingtone = ringtone
+                activePreviewKey = soundKey
+                runCatching { ringtone.play() }
+                previewStopJob = coroutineScope.launch {
+                    delay(2_000L)
+                    runCatching { ringtone.stop() }
+                    if (activePreviewRingtone === ringtone) {
+                        activePreviewRingtone = null
+                        activePreviewKey = null
+                    }
+                }
+            }
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            stopPreviewSound()
+        }
+    }
+
+    // Android System Ringtone Picker launcher (ACTION_RINGTONE_PICKER)
+    val ringtonePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val data = result.data
+            val pickedUri: Uri? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                data?.getParcelableExtra(RingtoneManager.EXTRA_RINGTONE_PICKED_URI, Uri::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                data?.getParcelableExtra(RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
+            }
+            if (pickedUri != null) {
+                val resolvedTitle = ApexNotificationHelper.resolveSoundTitle(context, pickedUri)
+                onSelectNotificationSound(pickedUri.toString(), resolvedTitle)
+                showSoundPickerDialog = false
+            }
+        }
+    }
 
     Surface(
         shape = RoundedCornerShape(22.dp),
@@ -295,6 +385,175 @@ fun StudyScheduleSettingsSection(
                             Text(
                                 text = stringResource(R.string.notif_permission_btn),
                                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // =================================================================
+            // 2B. Âm thanh thông báo & Chọn nhạc chuông thông báo
+            // =================================================================
+            Surface(
+                shape = RoundedCornerShape(18.dp),
+                color = CardWhite,
+                border = BorderStroke(
+                    1.dp,
+                    if (notificationCenterState.isNotificationSoundEnabled) {
+                        ElectricIndigo.copy(alpha = 0.28f)
+                    } else {
+                        CardBorderSoft
+                    }
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("settings_notification_sound_card")
+            ) {
+                val soundEnabled = notificationCenterState.isNotificationSoundEnabled
+                val isPreviewingCurrent = activePreviewKey == "current_selected"
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    // Toggle Row: Âm thanh thông báo (Bật / Tắt)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(RoundedCornerShape(11.dp))
+                                    .background(if (soundEnabled) ElectricIndigoLight else SurfaceCanvas),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = if (soundEnabled) Icons.Rounded.VolumeUp else Icons.Rounded.VolumeOff,
+                                    contentDescription = null,
+                                    tint = if (soundEnabled) IndigoOnSurface else InkMuted,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(
+                                    text = "Âm thanh thông báo",
+                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = InkPrimary
+                                )
+                                Text(
+                                    text = if (soundEnabled) "Đang bật âm thanh khi có thông báo" else "Đang tắt (chế độ im lặng)",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = InkSecondary
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Switch(
+                            checked = soundEnabled,
+                            onCheckedChange = { enabled ->
+                                if (!enabled) stopPreviewSound()
+                                onSoundEnabledChange(enabled)
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = ThemePrimary,
+                                uncheckedThumbColor = Color.White,
+                                uncheckedTrackColor = CardBorderSoft
+                            ),
+                            modifier = Modifier.testTag("settings_notif_sound_switch")
+                        )
+                    }
+
+                    HorizontalDivider(color = CardBorderSoft, thickness = 1.dp)
+
+                    // Selector Row: Chọn âm thanh thông báo + Nghe thử (2s preview)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .alpha(if (soundEnabled) 1f else 0.48f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable(enabled = soundEnabled) {
+                                    stopPreviewSound()
+                                    showSoundPickerDialog = true
+                                }
+                                .padding(vertical = 4.dp)
+                                .testTag("settings_choose_sound_row")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.MusicNote,
+                                contentDescription = null,
+                                tint = if (soundEnabled) IndigoOnSurface else InkMuted,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Chọn âm thanh thông báo",
+                                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                    color = InkPrimary
+                                )
+                                Text(
+                                    text = notificationCenterState.notificationSoundTitle,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (soundEnabled) ThemePrimary else InkMuted,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.ArrowForwardIos,
+                                contentDescription = null,
+                                tint = InkMuted,
+                                modifier = Modifier.size(13.dp)
+                            )
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                playPreviewSound(
+                                    "current_selected",
+                                    notificationCenterState.notificationSoundUri
+                                )
+                            },
+                            enabled = soundEnabled,
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(
+                                1.dp,
+                                if (soundEnabled) ThemePrimary else CardBorderSoft
+                            ),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                            modifier = Modifier
+                                .minimumInteractiveComponentSize()
+                                .testTag("settings_preview_sound_btn")
+                        ) {
+                            Icon(
+                                imageVector = if (isPreviewingCurrent) Icons.Rounded.Stop else Icons.Rounded.PlayArrow,
+                                contentDescription = if (isPreviewingCurrent) "Dừng nghe thử" else "Nghe thử",
+                                tint = if (soundEnabled) ThemePrimary else InkMuted,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text(
+                                text = if (isPreviewingCurrent) "Dừng" else "Nghe thử",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = if (soundEnabled) ThemePrimary else InkMuted,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     }
@@ -643,6 +902,212 @@ fun StudyScheduleSettingsSection(
             }
         )
     }
+
+    // Notification Sound Picker Dialog (3 built-in system presets + Android system Ringtone Picker)
+    if (showSoundPickerDialog) {
+        NotificationSoundPickerDialog(
+            currentSoundUri = notificationCenterState.notificationSoundUri,
+            currentSoundTitle = notificationCenterState.notificationSoundTitle,
+            activePreviewKey = activePreviewKey,
+            onPreviewPreset = { preset ->
+                playPreviewSound("preset_${preset.name}", preset.storedUri)
+            },
+            onSelectPreset = { preset ->
+                stopPreviewSound()
+                onSelectNotificationSound(preset.storedUri, preset.titleVi)
+                showSoundPickerDialog = false
+            },
+            onOpenDeviceRingtonePicker = {
+                stopPreviewSound()
+                val existingUri = ApexNotificationHelper.resolveSoundUri(
+                    context,
+                    notificationCenterState.notificationSoundUri
+                )
+                val intent = Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
+                    putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_NOTIFICATION)
+                    putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "Chọn âm thanh thông báo")
+                    putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
+                    putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false)
+                    putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, existingUri)
+                }
+                runCatching { ringtonePickerLauncher.launch(intent) }
+            },
+            onDismiss = {
+                stopPreviewSound()
+                showSoundPickerDialog = false
+            }
+        )
+    }
+}
+
+@Composable
+private fun NotificationSoundPickerDialog(
+    currentSoundUri: String?,
+    currentSoundTitle: String,
+    activePreviewKey: String?,
+    onPreviewPreset: (NotificationSoundPreset) -> Unit,
+    onSelectPreset: (NotificationSoundPreset) -> Unit,
+    onOpenDeviceRingtonePicker: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val selectedPreset = NotificationSoundPreset.fromStoredUri(currentSoundUri)
+    val isCustomDeviceTone = selectedPreset == null && !currentSoundUri.isNullOrBlank()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = CardWhite,
+        shape = RoundedCornerShape(24.dp),
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(ElectricIndigoLight),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.MusicNote,
+                        contentDescription = null,
+                        tint = IndigoOnSurface,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Text(
+                    text = "Chọn âm thanh thông báo",
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontFamily = PlusJakartaSansFontFamily,
+                        fontWeight = FontWeight.ExtraBold
+                    ),
+                    color = InkPrimary
+                )
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                NotificationSoundPreset.entries.forEach { preset ->
+                    val isSelected = selectedPreset == preset
+                    val isPlaying = activePreviewKey == "preset_${preset.name}"
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = if (isSelected) ElectricIndigoLight.copy(alpha = 0.55f) else SurfaceCanvas,
+                        border = BorderStroke(
+                            width = if (isSelected) 1.5.dp else 1.dp,
+                            color = if (isSelected) ThemePrimary else CardBorderSoft
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .clickable { onSelectPreset(preset) }
+                            .testTag("sound_preset_${preset.name.lowercase()}")
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 6.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            RadioButton(
+                                selected = isSelected,
+                                onClick = { onSelectPreset(preset) },
+                                colors = RadioButtonDefaults.colors(selectedColor = ThemePrimary)
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = preset.titleVi,
+                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = InkPrimary
+                                )
+                                Text(
+                                    text = preset.subtitleVi,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = InkSecondary
+                                )
+                            }
+                            IconButton(
+                                onClick = { onPreviewPreset(preset) },
+                                modifier = Modifier.testTag("preview_preset_${preset.name.lowercase()}")
+                            ) {
+                                Icon(
+                                    imageVector = if (isPlaying) Icons.Rounded.Stop else Icons.Rounded.PlayArrow,
+                                    contentDescription = if (isPlaying) "Dừng nghe thử" else "Nghe thử ${preset.titleVi}",
+                                    tint = ThemePrimary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                if (isCustomDeviceTone) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = EmeraldSuccessLight.copy(alpha = 0.65f),
+                        border = BorderStroke(1.dp, EmeraldSuccess.copy(alpha = 0.35f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.CheckCircle,
+                                contentDescription = null,
+                                tint = EmeraldSuccess,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = "Đang dùng âm từ máy: $currentSoundTitle",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = InkPrimary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(2.dp))
+
+                OutlinedButton(
+                    onClick = onOpenDeviceRingtonePicker,
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.25.dp, ThemePrimary),
+                    contentPadding = PaddingValues(vertical = 12.dp, horizontal = 14.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .minimumInteractiveComponentSize()
+                        .testTag("pick_device_ringtone_btn")
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.LibraryMusic,
+                        contentDescription = null,
+                        tint = ThemePrimary,
+                        modifier = Modifier.size(19.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Chọn từ âm thanh trên điện thoại...",
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                        color = ThemePrimary
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(text = "Đóng", color = InkSecondary, fontWeight = FontWeight.Bold)
+            }
+        }
+    )
 }
 
 @Composable

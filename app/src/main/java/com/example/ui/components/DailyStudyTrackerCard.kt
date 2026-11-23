@@ -24,12 +24,16 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.MenuBook
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.NotificationsOff
+import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -50,16 +54,15 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
-import com.example.data.DailyHabitTask
-import com.example.data.DefaultHabitData
+import com.example.data.AutoKpiSnapshot
 import com.example.data.NotificationPreferences
 import com.example.data.StreakStatus
 import com.example.data.WeekdayItem
@@ -69,6 +72,7 @@ import com.example.ui.theme.CardWhite
 import com.example.ui.theme.CyanGlow
 import com.example.ui.theme.ElectricIndigo
 import com.example.ui.theme.ElectricIndigoLight
+import com.example.ui.theme.EmeraldOnContainer
 import com.example.ui.theme.EmeraldSuccess
 import com.example.ui.theme.EmeraldSuccessLight
 import com.example.ui.theme.GoldMastery
@@ -79,67 +83,55 @@ import com.example.ui.theme.InkMuted
 import com.example.ui.theme.InkPrimary
 import com.example.ui.theme.InkSecondary
 import com.example.ui.theme.PlusJakartaSansFontFamily
+import com.example.ui.theme.PracticeTeal
 import com.example.ui.theme.RoseAlert
 import com.example.ui.theme.RoseDiffLight
-import com.example.ui.theme.StreakBg
-import com.example.ui.theme.StreakOrange
 import com.example.ui.theme.SurfaceCanvas
 import com.example.ui.theme.VividViolet
 import kotlin.math.roundToInt
 
 /**
- * Daily Study Habit Tracker card on Tab 1 (Lộ trình):
- * - Animated circular progress ring + interactive daily checklist
- * - Streak Counter paired with flickering AnimatedStreakFlame
- * - 7-day weekly dot calendar (T2–CN)
- * - Quick entry strip into the Custom Notification Scheduler Bottom Sheet
+ * 100% Automatic Daily Study Habit Tracker card on Tab 1 (Lộ trình):
+ * - Strictly READ-ONLY auto-updating KPI rows (zero manual checkboxes or clickable completions).
+ * - Live counters, animated progress bars, and automatic green ticks (`✓ Đạt`) driven by real study behavior.
+ * - Streak Counter paired with progressive MasteryStreakIcon.
+ * - 7-day weekly dot calendar (T2–CN) + Quick Notification Schedule entry strip.
  */
 @Composable
 fun DailyStudyTrackerCard(
-    completedHabitIds: Set<String>,
+    autoKpi: AutoKpiSnapshot,
     streakDays: Int,
     weeklyActiveDays: Set<String>,
     todayWeekdayId: String,
     notificationPrefs: NotificationPreferences,
-    onToggleHabit: (String) -> Unit,
     onOpenNotificationSheet: () -> Unit,
     streakStatus: StreakStatus = StreakStatus(currentStreak = streakDays),
     onOpenStreakSheet: () -> Unit = {},
-    dailySelfStudyMinutes: Int = 0,
     modifier: Modifier = Modifier
 ) {
-    val tasks = DefaultHabitData.dailyChecklist
-    val completedCount = completedHabitIds.count { id -> tasks.any { it.id == id } }
-    val progress = if (tasks.isEmpty()) 0f else completedCount.toFloat() / tasks.size.toFloat()
-
     var entered by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { entered = true }
 
     val animatedSweep by animateFloatAsState(
-        targetValue = if (entered) progress else 0f,
-        animationSpec = tween(durationMillis = 750, easing = FastOutSlowInEasing),
+        targetValue = if (entered) autoKpi.overallProgressFraction else 0f,
+        animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing),
         label = "daily_habit_ring_sweep"
     )
 
-    Surface(
+    GlassSurface(
         modifier = modifier
             .fillMaxWidth()
-            .shadow(
-                elevation = 10.dp,
-                shape = RoundedCornerShape(24.dp),
-                ambientColor = ElectricIndigo.copy(alpha = 0.08f),
-                spotColor = ElectricIndigo.copy(alpha = 0.14f)
-            )
             .testTag("daily_study_tracker_card"),
         shape = RoundedCornerShape(24.dp),
-        color = CardWhite,
-        border = BorderStroke(1.dp, CardBorderSoft)
+        solidColor = CardWhite,
+        solidBorder = BorderStroke(1.dp, CardBorderSoft),
+        solidShadowElevation = 4.dp
     ) {
         Column(
             modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // Header Row: Title + Streak Flame Badge
+            // Header Row: Title + Auto-Tracking Subtitle + Streak Pill
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -149,19 +141,54 @@ fun DailyStudyTrackerCard(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.daily_habit_card_title),
+                            style = MaterialTheme.typography.titleLarge.copy(fontSize = 16.sp),
+                            color = InkPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        Surface(
+                            shape = RoundedCornerShape(50),
+                            color = ElectricIndigoLight
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.AutoAwesome,
+                                    contentDescription = null,
+                                    tint = IndigoOnSurface,
+                                    modifier = Modifier.size(11.dp)
+                                )
+                                Text(
+                                    text = "Tự động",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 9.5.sp
+                                    ),
+                                    color = IndigoOnSurface,
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                            }
+                        }
+                    }
                     Text(
-                        text = stringResource(R.string.daily_habit_card_title),
-                        style = MaterialTheme.typography.titleLarge.copy(fontSize = 16.5.sp),
-                        color = InkPrimary
-                    )
-                    Text(
-                        text = if (dailySelfStudyMinutes > 0) {
-                            "Đã tự học hôm nay: $dailySelfStudyMinutes phút • Duy trì đều đặn nhé!"
+                        text = if (autoKpi.isAllDailyKpiMet) {
+                            "Đã hoàn thành 100% KPI hôm nay • Chuỗi +1 tự động!"
                         } else {
-                            stringResource(R.string.daily_habit_subtitle)
+                            "Tự cập nhật khi học từ vựng & tự học trên Học, Luyện, Thi"
                         },
                         style = MaterialTheme.typography.bodySmall,
-                        color = if (dailySelfStudyMinutes > 0) EmeraldSuccess else InkMuted,
+                        color = if (autoKpi.isAllDailyKpiMet) EmeraldSuccess else InkMuted,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -256,31 +283,68 @@ fun DailyStudyTrackerCard(
                 }
             }
 
-            // Center Row: Animated Circular Progress Ring + Interactive Checklist
+            // Center Row: Animated Circular KPI Ring + 2 Read-Only Auto-Updating Progress Rows
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp)
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 CircularHabitProgressRing(
                     progress = animatedSweep,
-                    completedCount = completedCount,
-                    totalCount = tasks.size,
+                    completedCount = autoKpi.completedCriteriaCount,
+                    totalCount = 2,
                     modifier = Modifier.testTag("daily_habit_progress_ring")
                 )
 
                 Column(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    tasks.forEach { task ->
-                        val isChecked = completedHabitIds.contains(task.id)
-                        DailyChecklistItemRow(
-                            task = task,
-                            isChecked = isChecked,
-                            onClick = { onToggleHabit(task.id) }
-                        )
+                    // Criterion 1: Learned Vocabulary (Read-Only)
+                    AutoKpiProgressRow(
+                        icon = Icons.Rounded.MenuBook,
+                        titleVi = "Từ vựng hôm nay",
+                        pillText = if (autoKpi.isVocabTargetMet) {
+                            "✓ Đạt"
+                        } else {
+                            "${autoKpi.dailyWordsLearned}/${autoKpi.targetWordsPerDay} từ"
+                        },
+                        subtitleVi = if (autoKpi.isVocabTargetMet) {
+                            "Đã học ${autoKpi.dailyWordsLearned}/${autoKpi.targetWordsPerDay} từ hôm nay"
+                        } else {
+                            "Flashcard (Đã thuộc), SRS & Mini-game"
+                        },
+                        progress = autoKpi.vocabProgressFraction,
+                        isMet = autoKpi.isVocabTargetMet,
+                        accentColor = ElectricIndigo,
+                        testTagName = "auto_kpi_vocab_row"
+                    )
+
+                    // Criterion 2: Active Study Time (Read-Only)
+                    val studySubtitle = when {
+                        autoKpi.isStudyTimeTargetMet ->
+                            "Đã học ${autoKpi.dailyStudyMinutes}/${autoKpi.targetMinutesPerDay} phút (${autoKpi.liveClockFormatted})"
+                        autoKpi.isPausedDueToInactivity ->
+                            "Tạm dừng nghỉ >60s • Chạm học để tiếp tục"
+                        autoKpi.isTimerActive ->
+                            "Đang tự đếm (${autoKpi.liveClockFormatted})"
+                        else ->
+                            "Tự đếm khi học trên Học, Luyện, Thi (${autoKpi.liveClockFormatted})"
                     }
+                    AutoKpiProgressRow(
+                        icon = Icons.Rounded.Timer,
+                        titleVi = "Thời gian tự học",
+                        pillText = if (autoKpi.isStudyTimeTargetMet) {
+                            "✓ Đạt"
+                        } else {
+                            "${autoKpi.dailyStudyMinutes}/${autoKpi.targetMinutesPerDay} phút"
+                        },
+                        subtitleVi = studySubtitle,
+                        progress = autoKpi.studyTimeProgressFraction,
+                        isMet = autoKpi.isStudyTimeTargetMet,
+                        accentColor = PracticeTeal,
+                        testTagName = "auto_kpi_time_row"
+                    )
                 }
             }
 
@@ -298,15 +362,15 @@ fun DailyStudyTrackerCard(
                         style = MaterialTheme.typography.titleSmall,
                         color = InkSecondary
                     )
-                    if (completedCount == tasks.size && tasks.isNotEmpty()) {
+                    if (autoKpi.isAllDailyKpiMet) {
                         Surface(
                             shape = RoundedCornerShape(50),
                             color = EmeraldSuccessLight
                         ) {
                             Text(
                                 text = stringResource(R.string.daily_goal_done_badge),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = EmeraldSuccess,
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = EmeraldOnContainer,
                                 modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.dp)
                             )
                         }
@@ -336,7 +400,7 @@ fun DailyStudyTrackerCard(
                 }
             }
 
-            // Quick Notification Schedule Strip -> Opens Notification Settings Bottom Sheet
+            // Quick Notification Schedule Strip -> Opens Schedule Settings
             val nextSlot = notificationPrefs.slots.firstOrNull { it.enabled }
             val activeCount = notificationPrefs.slots.count { it.enabled }
             Surface(
@@ -421,6 +485,124 @@ fun DailyStudyTrackerCard(
     }
 }
 
+/**
+ * Strictly READ-ONLY automatic KPI criterion row (non-clickable):
+ * Shows icon/green checkmark, title, live progress pill (`7/10 từ`, `12/15 phút` or crisp green `✓ Đạt`),
+ * animated progress bar, and concise helper subtitle.
+ */
+@Composable
+fun AutoKpiProgressRow(
+    icon: ImageVector,
+    titleVi: String,
+    pillText: String,
+    subtitleVi: String,
+    progress: Float,
+    isMet: Boolean,
+    accentColor: Color,
+    testTagName: String,
+    modifier: Modifier = Modifier
+) {
+    val bgColor by animateColorAsState(
+        targetValue = if (isMet) EmeraldSuccessLight.copy(alpha = 0.65f) else SurfaceCanvas,
+        animationSpec = tween(260),
+        label = "auto_kpi_bg_$testTagName"
+    )
+    val badgeBg by animateColorAsState(
+        targetValue = if (isMet) EmeraldSuccess else accentColor.copy(alpha = 0.14f),
+        animationSpec = tween(260),
+        label = "auto_kpi_badge_$testTagName"
+    )
+    val animatedProgress by animateFloatAsState(
+        targetValue = progress.coerceIn(0f, 1f),
+        animationSpec = tween(420, easing = FastOutSlowInEasing),
+        label = "auto_kpi_progress_$testTagName"
+    )
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(bgColor)
+            .border(
+                width = 1.dp,
+                color = if (isMet) EmeraldSuccess.copy(alpha = 0.35f) else CardBorderSoft,
+                shape = RoundedCornerShape(14.dp)
+            )
+            .padding(horizontal = 10.dp, vertical = 9.dp)
+            .testTag(testTagName),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(24.dp)
+                    .clip(CircleShape)
+                    .background(if (isMet) EmeraldSuccess else accentColor.copy(alpha = 0.14f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = if (isMet) Icons.Rounded.Check else icon,
+                    contentDescription = if (isMet) "Đã đạt mục tiêu" else titleVi,
+                    tint = if (isMet) Color.White else accentColor,
+                    modifier = Modifier.size(14.dp)
+                )
+            }
+
+            Text(
+                text = titleVi,
+                style = MaterialTheme.typography.labelLarge.copy(
+                    fontSize = 12.5.sp,
+                    fontWeight = FontWeight.Bold
+                ),
+                color = InkPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+
+            Surface(
+                shape = RoundedCornerShape(50),
+                color = badgeBg
+            ) {
+                Text(
+                    text = pillText,
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontFamily = PlusJakartaSansFontFamily,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 10.5.sp
+                    ),
+                    color = if (isMet) Color.White else accentColor,
+                    maxLines = 1,
+                    softWrap = false,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                )
+            }
+        }
+
+        LinearProgressIndicator(
+            progress = { animatedProgress },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(6.dp)
+                .clip(RoundedCornerShape(50)),
+            color = if (isMet) EmeraldSuccess else accentColor,
+            trackColor = CardWhite
+        )
+
+        Text(
+            text = subtitleVi,
+            style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
+            color = if (isMet) EmeraldOnContainer else InkMuted,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
 @Composable
 private fun CircularHabitProgressRing(
     progress: Float,
@@ -432,15 +614,14 @@ private fun CircularHabitProgressRing(
     val trackColor = SurfaceCanvas
 
     Box(
-        modifier = modifier.size(96.dp),
+        modifier = modifier.size(92.dp),
         contentAlignment = Alignment.Center
     ) {
-        Canvas(modifier = Modifier.size(96.dp)) {
+        Canvas(modifier = Modifier.size(92.dp)) {
             val strokePx = 10.dp.toPx()
             val inset = strokePx / 2f
             val arcSize = Size(size.width - strokePx, size.height - strokePx)
 
-            // Soft track ring
             drawArc(
                 color = trackColor,
                 startAngle = 0f,
@@ -451,13 +632,15 @@ private fun CircularHabitProgressRing(
                 style = Stroke(width = strokePx, cap = StrokeCap.Round)
             )
 
-            // Gradient active sweep arc
             val sweepAngle = (progress * 360f).coerceIn(0f, 360f)
             if (sweepAngle > 0.5f) {
+                val brush = if (percent >= 100) {
+                    Brush.sweepGradient(listOf(EmeraldSuccess, CyanGlow, EmeraldSuccess))
+                } else {
+                    Brush.sweepGradient(listOf(ElectricIndigo, VividViolet, CyanGlow, ElectricIndigo))
+                }
                 drawArc(
-                    brush = Brush.sweepGradient(
-                        colors = listOf(ElectricIndigo, VividViolet, CyanGlow, ElectricIndigo)
-                    ),
+                    brush = brush,
                     startAngle = -90f,
                     sweepAngle = sweepAngle,
                     useCenter = false,
@@ -474,86 +657,14 @@ private fun CircularHabitProgressRing(
                 style = MaterialTheme.typography.titleLarge.copy(
                     fontFamily = PlusJakartaSansFontFamily,
                     fontWeight = FontWeight.ExtraBold,
-                    fontSize = 19.sp
+                    fontSize = 18.sp
                 ),
-                color = if (completedCount == totalCount && totalCount > 0) EmeraldSuccess else IndigoOnSurface
+                color = if (completedCount >= totalCount && totalCount > 0) EmeraldSuccess else IndigoOnSurface
             )
             Text(
-                text = "$completedCount/$totalCount mục",
+                text = "$completedCount/$totalCount KPI",
                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                 color = InkMuted
-            )
-        }
-    }
-}
-
-@Composable
-private fun DailyChecklistItemRow(
-    task: DailyHabitTask,
-    isChecked: Boolean,
-    onClick: () -> Unit
-) {
-    val bgColor by animateColorAsState(
-        targetValue = if (isChecked) EmeraldSuccessLight.copy(alpha = 0.65f) else SurfaceCanvas,
-        animationSpec = tween(200),
-        label = "habit_row_bg"
-    )
-    val checkBg by animateColorAsState(
-        targetValue = if (isChecked) EmeraldSuccess else CardWhite,
-        animationSpec = tween(200),
-        label = "habit_check_bg"
-    )
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(bgColor)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 8.dp)
-            .testTag("habit_item_${task.id}"),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(22.dp)
-                .clip(CircleShape)
-                .background(checkBg)
-                .border(
-                    width = 1.5.dp,
-                    color = if (isChecked) EmeraldSuccess else ElectricIndigo.copy(alpha = 0.35f),
-                    shape = CircleShape
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            if (isChecked) {
-                Icon(
-                    imageVector = Icons.Rounded.Check,
-                    contentDescription = "Đã hoàn thành",
-                    tint = Color.White,
-                    modifier = Modifier.size(14.dp)
-                )
-            }
-        }
-
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = task.titleVi,
-                style = MaterialTheme.typography.labelLarge.copy(
-                    fontSize = 12.5.sp,
-                    textDecoration = if (isChecked) TextDecoration.LineThrough else TextDecoration.None
-                ),
-                color = if (isChecked) InkSecondary else InkPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = task.subtitleVi,
-                style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.5.sp),
-                color = InkMuted,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
             )
         }
     }

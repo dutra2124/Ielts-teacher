@@ -42,6 +42,11 @@ import androidx.compose.material.icons.rounded.LocalFireDepartment
 import androidx.compose.material.icons.rounded.MenuBook
 import androidx.compose.material.icons.rounded.Radar
 import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.TaskAlt
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -81,7 +86,9 @@ import com.example.data.PracticeSkill
 import com.example.data.SkillBandProgress
 import com.example.data.StreakStatus
 import com.example.data.WeeklyBarDay
+import com.example.ui.components.GlassSurface
 import com.example.ui.components.MasteryStreakIcon
+import com.example.ui.components.tactilePress
 import com.example.ui.theme.CardBorderSoft
 import com.example.ui.theme.CardSurfaceTinted
 import com.example.ui.theme.CardWhite
@@ -188,18 +195,14 @@ fun DiligenceScoreCard(
 
     val trackColor = SurfaceCanvas
 
-    Surface(
+    GlassSurface(
         modifier = modifier
             .fillMaxWidth()
-            .shadow(
-                elevation = 8.dp,
-                shape = RoundedCornerShape(24.dp),
-                ambientColor = primary.copy(alpha = 0.10f)
-            )
             .testTag("diligence_score_card"),
         shape = RoundedCornerShape(24.dp),
-        color = CardWhite,
-        border = BorderStroke(if (apexColors.isHighContrast) 1.5.dp else 1.dp, CardBorderSoft)
+        solidColor = CardWhite,
+        solidBorder = BorderStroke(if (apexColors.isHighContrast) 1.5.dp else 1.dp, CardBorderSoft),
+        solidShadowElevation = 4.dp
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -507,13 +510,20 @@ private fun PastelMetricPill(
 @Composable
 fun ConsistencyHeatmapCard(
     heatmapDays: List<HeatmapDayCell>,
+    collapsible: Boolean = false,
+    initiallyExpanded: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val isDark = LocalApexColors.current.isDark
+    var isExpanded by remember(collapsible, initiallyExpanded) {
+        mutableStateOf(!collapsible || initiallyExpanded)
+    }
     var selectedCellIndex by remember(heatmapDays.size) {
         mutableIntStateOf((heatmapDays.lastIndex).coerceAtLeast(0))
     }
     val selectedCell = heatmapDays.getOrNull(selectedCellIndex)
+    val activeDaysCount = remember(heatmapDays) { heatmapDays.count { it.intensityLevel > 0 } }
+    val recent7Days = remember(heatmapDays) { heatmapDays.takeLast(7) }
 
     fun heatColor(level: Int): Color = if (isDark) {
         when (level) {
@@ -533,20 +543,32 @@ fun ConsistencyHeatmapCard(
         }
     }
 
-    Surface(
+    GlassSurface(
         modifier = modifier
             .fillMaxWidth()
             .testTag("consistency_heatmap_card"),
-        shape = RoundedCornerShape(24.dp),
-        color = CardWhite,
-        border = BorderStroke(1.dp, CardBorderSoft)
+        shape = RoundedCornerShape(22.dp),
+        solidColor = CardWhite,
+        solidBorder = BorderStroke(1.dp, CardBorderSoft)
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            modifier = Modifier.padding(horizontal = 15.dp, vertical = if (isExpanded) 15.dp else 12.dp),
+            verticalArrangement = Arrangement.spacedBy(if (isExpanded) 12.dp else 0.dp)
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(
+                        if (collapsible) {
+                            Modifier
+                                .clip(RoundedCornerShape(14.dp))
+                                .tactilePress(pressedScale = 0.98f)
+                                .clickable { isExpanded = !isExpanded }
+                                .testTag("heatmap_toggle_expand_btn")
+                        } else {
+                            Modifier
+                        }
+                    ),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -557,8 +579,8 @@ fun ConsistencyHeatmapCard(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(48.dp)
-                            .clip(RoundedCornerShape(14.dp))
+                            .size(if (collapsible && !isExpanded) 38.dp else 44.dp)
+                            .clip(RoundedCornerShape(12.dp))
                             .background(VividVioletLight),
                         contentAlignment = Alignment.Center
                     ) {
@@ -566,47 +588,91 @@ fun ConsistencyHeatmapCard(
                             imageVector = Icons.Rounded.CalendarMonth,
                             contentDescription = null,
                             tint = VividViolet,
-                            modifier = Modifier.size(28.dp)
+                            modifier = Modifier.size(if (collapsible && !isExpanded) 21.dp else 24.dp)
                         )
                     }
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "Lịch nhiệt 28 ngày",
-                            style = MaterialTheme.typography.titleMedium.copy(
+                            style = MaterialTheme.typography.titleSmall.copy(
                                 fontFamily = PlusJakartaSansFontFamily,
                                 fontWeight = FontWeight.ExtraBold
                             ),
-                            color = InkPrimary
+                            color = InkPrimary,
+                            maxLines = 1
                         )
                         Text(
-                            text = "Chạm vào từng ô để xem nhật ký ngày hôm đó",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = InkMuted
+                            text = if (isExpanded) {
+                                "$activeDaysCount/28 ngày hoạt động • Chạm ô để xem chi tiết"
+                            } else {
+                                "$activeDaysCount/28 ngày chăm chỉ • Chạm để mở rộng"
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = InkMuted,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
 
-                // Compact Intensity Legend
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(3.dp)
-                ) {
-                    Text("Ít", style = MaterialTheme.typography.labelSmall, color = InkMuted)
-                    (0..4).forEach { lvl ->
-                        Box(
-                            modifier = Modifier
-                                .size(11.dp)
-                                .clip(RoundedCornerShape(3.dp))
-                                .background(heatColor(lvl))
+                if (collapsible && !isExpanded) {
+                    // Compact 7-day mini preview dots + chevron
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        recent7Days.forEach { day ->
+                            Box(
+                                modifier = Modifier
+                                    .size(10.dp)
+                                    .clip(RoundedCornerShape(3.dp))
+                                    .background(heatColor(day.intensityLevel))
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(2.dp))
+                        Icon(
+                            imageVector = Icons.Rounded.ExpandMore,
+                            contentDescription = "Mở rộng lịch nhiệt 28 ngày",
+                            tint = InkSecondary,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
-                    Text("Chăm", style = MaterialTheme.typography.labelSmall, color = InkMuted)
+                } else {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text("Ít", style = MaterialTheme.typography.labelSmall, color = InkMuted)
+                        (0..4).forEach { lvl ->
+                            Box(
+                                modifier = Modifier
+                                    .size(10.dp)
+                                    .clip(RoundedCornerShape(3.dp))
+                                    .background(heatColor(lvl))
+                            )
+                        }
+                        Text("Chăm", style = MaterialTheme.typography.labelSmall, color = InkMuted)
+                        if (collapsible) {
+                            Icon(
+                                imageVector = Icons.Rounded.ExpandLess,
+                                contentDescription = "Thu gọn lịch nhiệt 28 ngày",
+                                tint = InkSecondary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
                 }
             }
 
-            // 4 rows x 7 rounded squares
-            val weeks = heatmapDays.chunked(7)
-            Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            AnimatedVisibility(
+                visible = isExpanded,
+                enter = expandVertically(tween(220)) + fadeIn(tween(200)),
+                exit = shrinkVertically(tween(180)) + fadeOut(tween(150))
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // 4 rows x 7 rounded squares
+                    val weeks = heatmapDays.chunked(7)
+                    Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
                 weeks.forEachIndexed { wIdx, weekCells ->
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -700,6 +766,8 @@ fun ConsistencyHeatmapCard(
                             )
                         }
                     }
+                }
+            }
                 }
             }
         }

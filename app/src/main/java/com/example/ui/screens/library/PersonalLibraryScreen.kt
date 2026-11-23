@@ -56,11 +56,13 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -137,10 +139,25 @@ fun PersonalLibraryScreen(
 
     var selectedCategory by rememberSaveable { mutableStateOf(LibraryCategoryFilter.ALL) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
+    var debouncedQuery by rememberSaveable { mutableStateOf("") }
+    var selectedStatusFilter by rememberSaveable { mutableStateOf("all") } // all | unlearned | reviewing | mastered
+    var selectedModuleFilter by rememberSaveable { mutableStateOf<Int?>(null) } // null = All Modules, 1..12 = Module N
     var selectedTag by rememberSaveable { mutableStateOf<String?>(null) }
     var openedMaterialId by remember { mutableStateOf<String?>(null) }
     var editingMaterial by remember { mutableStateOf<PersonalMaterial?>(null) }
     var isCreatingNew by remember { mutableStateOf(false) }
+
+    // Fast 300ms debounced search for smooth navigation over thousands of imported words & articles
+    LaunchedEffect(searchQuery) {
+        if (searchQuery.isEmpty()) {
+            debouncedQuery = ""
+        } else {
+            delay(300L)
+            debouncedQuery = searchQuery
+        }
+    }
+
+    val mergedVocabPool = remember(uiState.allMergedVocabulary) { uiState.allMergedVocabulary }
 
     val allTags = remember(uiState.personalMaterials) {
         uiState.personalMaterials
@@ -151,8 +168,18 @@ fun PersonalLibraryScreen(
             .take(14)
     }
 
-    val filteredMaterials = remember(uiState.personalMaterials, selectedCategory, searchQuery, selectedTag) {
-        val q = searchQuery.trim().lowercase()
+    val filteredMaterials = remember(
+        uiState.personalMaterials,
+        selectedCategory,
+        debouncedQuery,
+        selectedTag,
+        selectedModuleFilter,
+        selectedStatusFilter,
+        uiState.completedModuleIds,
+        uiState.studyLogs
+    ) {
+        val q = debouncedQuery.trim().lowercase()
+        val loggedTitles = uiState.studyLogs.map { it.summaryVi.lowercase() }
         uiState.personalMaterials.filter { pm ->
             val catMatch = when (selectedCategory) {
                 LibraryCategoryFilter.ALL -> true
@@ -160,26 +187,52 @@ fun PersonalLibraryScreen(
                 LibraryCategoryFilter.ARTICLES -> LibraryCategoryFilter.classifyMaterialCategory(pm.category) == LibraryCategoryFilter.ARTICLES
                 else -> false
             }
+            val modMatch = selectedModuleFilter == null || pm.moduleId == selectedModuleFilter
             val tagMatch = selectedTag == null || pm.tags.any {
                 it.removePrefix("#").equals(selectedTag, ignoreCase = true)
+            }
+            val isLogged = loggedTitles.any { it.contains(pm.title.lowercase()) }
+            val isModuleDone = uiState.completedModuleIds.contains(pm.moduleId)
+            val statusMatch = when (selectedStatusFilter) {
+                "unlearned" -> !isLogged && !isModuleDone
+                "reviewing" -> isLogged && !isModuleDone
+                "mastered" -> isModuleDone
+                else -> true
             }
             val queryMatch = q.isEmpty() ||
                 pm.title.lowercase().contains(q) ||
                 pm.contentEn.lowercase().contains(q) ||
                 pm.notesVi.lowercase().contains(q) ||
                 pm.tags.any { it.lowercase().contains(q) }
-            catMatch && tagMatch && queryMatch
+            catMatch && modMatch && tagMatch && statusMatch && queryMatch
         }
     }
 
-    val flashcardDecksByModule = remember(uiState.allVocabulary, uiState.modules, searchQuery) {
-        val q = searchQuery.trim().lowercase()
-        val matchingWords = if (q.isEmpty()) {
-            uiState.allVocabulary
-        } else {
-            uiState.allVocabulary.filter {
-                it.word.lowercase().contains(q) || it.meaningVi.lowercase().contains(q)
+    val flashcardDecksByModule = remember(
+        mergedVocabPool,
+        uiState.modules,
+        debouncedQuery,
+        selectedModuleFilter,
+        selectedStatusFilter,
+        uiState.learnedVocabIds,
+        uiState.srsWordIds
+    ) {
+        val q = debouncedQuery.trim().lowercase()
+        val matchingWords = mergedVocabPool.filter { item ->
+            val modMatch = selectedModuleFilter == null || item.moduleId == selectedModuleFilter
+            val inSrs = uiState.srsWordIds.contains(item.id)
+            val isLearned = uiState.learnedVocabIds.contains(item.id)
+            val statusMatch = when (selectedStatusFilter) {
+                "unlearned" -> !isLearned && !inSrs
+                "reviewing" -> inSrs
+                "mastered" -> isLearned && !inSrs
+                else -> true
             }
+            val queryMatch = q.isEmpty() ||
+                item.word.lowercase().contains(q) ||
+                item.meaningVi.lowercase().contains(q) ||
+                item.exampleEn.lowercase().contains(q)
+            modMatch && statusMatch && queryMatch
         }
         matchingWords.groupBy { it.moduleId }.entries
             .sortedBy { it.key }
@@ -189,8 +242,8 @@ fun PersonalLibraryScreen(
             }
     }
 
-    val filteredPersonalExams = remember(uiState.customExams, searchQuery) {
-        val q = searchQuery.trim().lowercase()
+    val filteredPersonalExams = remember(uiState.customExams, debouncedQuery) {
+        val q = debouncedQuery.trim().lowercase()
         if (q.isEmpty()) uiState.customExams
         else uiState.customExams.filter {
             it.title.lowercase().contains(q) || it.topicVi.lowercase().contains(q) || it.topicEn.lowercase().contains(q)
@@ -446,6 +499,90 @@ fun PersonalLibraryScreen(
                                     ),
                                     color = if (selected) Color.White else InkSecondary,
                                     modifier = Modifier.padding(horizontal = 13.dp, vertical = 8.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    // Status Filter Chips: Tất cả | Chưa thuộc | Đang ôn | Đã thuộc
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        listOf(
+                            "all" to "Tất cả",
+                            "unlearned" to "Chưa thuộc",
+                            "reviewing" to "Đang ôn",
+                            "mastered" to "Đã thuộc"
+                        ).forEach { (id, label) ->
+                            val isSelected = selectedStatusFilter == id
+                            Surface(
+                                shape = RoundedCornerShape(50),
+                                color = if (isSelected) EmeraldSuccess else CardWhite,
+                                border = BorderStroke(1.dp, if (isSelected) EmeraldSuccess else CardBorderSoft),
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(50))
+                                    .clickable { selectedStatusFilter = id }
+                                    .testTag("library_status_$id")
+                            ) {
+                                Text(
+                                    text = label,
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                    ),
+                                    color = if (isSelected) Color.White else InkSecondary,
+                                    modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    // Module 1–12 Filter Chips
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        val allModsSelected = selectedModuleFilter == null
+                        Surface(
+                            shape = RoundedCornerShape(50),
+                            color = if (allModsSelected) ElectricIndigo else CardWhite,
+                            border = BorderStroke(1.dp, if (allModsSelected) ElectricIndigo else CardBorderSoft),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(50))
+                                .clickable { selectedModuleFilter = null }
+                                .testTag("library_module_all")
+                        ) {
+                            Text(
+                                text = "Tất cả Module",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = if (allModsSelected) FontWeight.Bold else FontWeight.Medium
+                                ),
+                                color = if (allModsSelected) Color.White else InkSecondary,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                            )
+                        }
+                        (1..12).forEach { modId ->
+                            val isSelected = selectedModuleFilter == modId
+                            Surface(
+                                shape = RoundedCornerShape(50),
+                                color = if (isSelected) ElectricIndigo else CardWhite,
+                                border = BorderStroke(1.dp, if (isSelected) ElectricIndigo else CardBorderSoft),
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(50))
+                                    .clickable { selectedModuleFilter = if (isSelected) null else modId }
+                                    .testTag("library_module_$modId")
+                            ) {
+                                Text(
+                                    text = "Module $modId",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                    ),
+                                    color = if (isSelected) Color.White else InkSecondary,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
                                 )
                             }
                         }
@@ -724,24 +861,26 @@ fun PersonalLibraryScreen(
         }
     }
 
-    // Active Self-Study Detail Sheet
+    // Active Fullscreen Interactive Article Reader (Tap-to-Lookup + 1-Tap Save to SRS)
     val openedMaterial = uiState.personalMaterials.firstOrNull { it.id == openedMaterialId }
     if (openedMaterial != null) {
         val linkedModule = uiState.modules.firstOrNull { it.id == openedMaterial.moduleId }
-        PersonalMaterialDetailSheet(
+        SelfStudyReaderScreen(
             material = openedMaterial,
             linkedModule = linkedModule,
+            allVocabulary = mergedVocabPool,
             aiState = uiState.personalMaterialAiState,
             dailySelfStudyMinutes = uiState.dailySelfStudyMinutes,
             onEditMaterial = { mat ->
                 openedMaterialId = null
                 editingMaterial = mat
             },
-            onSaveFlashcard = onSaveHighlightFlashcard,
+            onSaveFlashcardToSrs = onSaveHighlightFlashcard,
             onRequestAiSummary = onSummarizeMaterialWithAi,
             onLogSelfStudyMinutes = onLogSelfStudySession,
             onShowMessage = onShowMessage,
-            onDismiss = { openedMaterialId = null }
+            onClose = { openedMaterialId = null },
+            modifier = Modifier.fillMaxSize()
         )
     }
 

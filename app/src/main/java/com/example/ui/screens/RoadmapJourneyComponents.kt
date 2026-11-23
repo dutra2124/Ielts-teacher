@@ -78,6 +78,8 @@ import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.data.IeltsModule
 import com.example.data.RoadmapTier
+import com.example.ui.components.GlassSurface
+import com.example.ui.components.tactilePress
 import com.example.ui.theme.CardBorderSoft
 import com.example.ui.theme.CardSurfaceTinted
 import com.example.ui.theme.CardWhite
@@ -162,13 +164,13 @@ internal fun AnimatedTierJourneyStrip(
         else -> 2
     }
 
-    Surface(
+    GlassSurface(
         modifier = modifier
             .fillMaxWidth()
             .testTag("animated_tier_journey_strip"),
         shape = RoundedCornerShape(22.dp),
-        color = CardWhite,
-        border = BorderStroke(if (apexColors.isHighContrast) 1.5.dp else 1.dp, CardBorderSoft)
+        solidColor = CardWhite,
+        solidBorder = BorderStroke(if (apexColors.isHighContrast) 1.5.dp else 1.dp, CardBorderSoft)
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
@@ -567,6 +569,7 @@ private fun WindingNodeEmblem(
         Box(
             modifier = Modifier
                 .size(66.dp)
+                .tactilePress(pressedScale = 0.93f)
                 .clickable(onClick = onClick)
                 .testTag("roadmap_node_${module.id}"),
             contentAlignment = Alignment.Center
@@ -678,23 +681,20 @@ private fun ModuleRoadmapCard(
         label = "mod_overall_${module.id}"
     )
 
-    Surface(
+    GlassSurface(
         modifier = modifier
-            .shadow(
-                elevation = if (isSelected) 12.dp else 4.dp,
-                shape = RoundedCornerShape(22.dp),
-                ambientColor = primary.copy(alpha = if (isSelected) 0.18f else 0.06f),
-                spotColor = primary.copy(alpha = if (isSelected) 0.24f else 0.10f)
-            )
+            .tactilePress(pressedScale = 0.97f)
             .clip(RoundedCornerShape(22.dp))
             .clickable(onClick = onSelect)
             .testTag("roadmap_module_${module.id}"),
         shape = RoundedCornerShape(22.dp),
-        color = CardWhite,
-        border = BorderStroke(
+        solidColor = CardWhite,
+        solidBorder = BorderStroke(
             width = if (isSelected || highContrast) 2.dp else 1.dp,
             color = borderColor
-        )
+        ),
+        accentTint = if (isSelected) primary else null,
+        solidShadowElevation = if (isSelected) 6.dp else 2.dp
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
@@ -935,6 +935,7 @@ private fun ModuleRoadmapCard(
                             contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
                             modifier = Modifier
                                 .minimumInteractiveComponentSize()
+                                .tactilePress()
                                 .testTag("open_learn_module_${module.id}")
                         ) {
                             Text(

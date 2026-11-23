@@ -61,16 +61,43 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.border
+import com.example.ui.components.LocalGlassmorphismDisabled
+import com.example.ui.components.LocalStrictExamMode
+import com.example.ui.components.glassLuminousBorderBrush
+import com.example.ui.components.isGlassmorphismActive
+import com.example.ui.components.resolvedGlassAlpha
+import com.example.ui.components.tactilePress
 import com.example.data.ExamHubSubTab
+import com.example.data.KpiCelebrationBanner
+import com.example.data.StreakVisualStyle
 import com.example.data.StudyTab
 import com.example.ui.components.AccountSidebarDrawerContent
 import com.example.ui.components.AndroidPushNotificationBanner
 import com.example.ui.components.AvatarPickerDialog
 import com.example.ui.components.CloudSyncSettingsSheet
 import com.example.ui.components.DataImporterBottomSheet
+import com.example.ui.components.MasteryStreakIcon
 import com.example.ui.components.NotificationCenterSheet
 import com.example.ui.components.SecuritySettingsSheet
 import com.example.ui.components.StreakProgressSheet
@@ -91,8 +118,14 @@ import com.example.ui.theme.AppThemeMode
 import com.example.ui.theme.CardWhite
 import com.example.ui.theme.CdIeltsVisualMode
 import com.example.ui.theme.ElectricIndigoLight
+import com.example.ui.theme.EmeraldOnContainer
+import com.example.ui.theme.EmeraldSuccess
+import com.example.ui.theme.EmeraldSuccessLight
 import com.example.ui.theme.IndigoOnSurface
 import com.example.ui.theme.InkMuted
+import com.example.ui.theme.InkPrimary
+import com.example.ui.theme.InkSecondary
+import com.example.ui.theme.PlusJakartaSansFontFamily
 import com.example.ui.theme.ProvideAdaptiveLayoutInfo
 import com.example.ui.theme.SurfaceCanvas
 import com.example.ui.theme.ThemeOnPrimary
@@ -139,6 +172,27 @@ fun ApexIeltsApp(
         }
     }
 
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, viewModel) {
+        val observer = viewModel.createAutoKpiLifecycleObserver()
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    val isEligibleStudyContext = uiState.isAuthLoaded &&
+        uiState.userProfile.isLoggedIn &&
+        (!uiState.securityPrefs.appLockEnabled || uiState.isAppUnlocked) &&
+        (uiState.activeExamSession != null ||
+            uiState.activeTab == StudyTab.LEARN ||
+            uiState.activeTab == StudyTab.PRACTICE ||
+            uiState.activeTab == StudyTab.EXAM)
+
+    LaunchedEffect(isEligibleStudyContext) {
+        viewModel.setInStudyScreenContext(isEligibleStudyContext)
+    }
+
     LaunchedEffect(uiState.snackbarMessage) {
         val message = uiState.snackbarMessage
         if (message != null) {
@@ -147,11 +201,24 @@ fun ApexIeltsApp(
         }
     }
 
+    val interactionObserverModifier = Modifier.pointerInput(Unit) {
+        awaitPointerEventScope {
+            while (true) {
+                awaitPointerEvent(PointerEventPass.Initial)
+                viewModel.recordUserInteraction()
+            }
+        }
+    }
+
     ApexIeltsTheme(
         themePrefs = uiState.themePrefs,
         examRoomOverrideMode = examRoomOverrideMode
     ) {
-        ProvideAdaptiveLayoutInfo(modifier = Modifier.fillMaxSize()) { layoutInfo ->
+        ProvideAdaptiveLayoutInfo(
+            modifier = Modifier
+                .fillMaxSize()
+                .then(interactionObserverModifier)
+        ) { layoutInfo ->
             // Wait briefly for DataStore session load to prevent Login flicker on returning users
             if (!uiState.isAuthLoaded) {
                 Box(
@@ -204,13 +271,28 @@ fun ApexIeltsApp(
                 } else {
                     CdIeltsVisualMode.LIGHT
                 }
-                MockExamScreen(
-                    session = activeExam,
-                    initialVisualMode = initialExamVisualMode,
-                    onSubmitExam = viewModel::submitMockExam,
-                    onExitWithoutSubmit = viewModel::exitMockExamWithoutSubmit,
-                    modifier = Modifier.fillMaxSize()
-                )
+                CompositionLocalProvider(
+                    LocalStrictExamMode provides true,
+                    LocalGlassmorphismDisabled provides true
+                ) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        MockExamScreen(
+                            session = activeExam,
+                            initialVisualMode = initialExamVisualMode,
+                            onSubmitExam = viewModel::submitMockExam,
+                            onExitWithoutSubmit = viewModel::exitMockExamWithoutSubmit,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                        KpiCelebrationBannerOverlay(
+                            banner = uiState.kpiCelebrationBanner,
+                            visualStyle = uiState.streakStatus.visualStyle,
+                            onDismiss = viewModel::dismissKpiCelebrationBanner,
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .widthIn(max = 560.dp)
+                        )
+                    }
+                }
                 return@ProvideAdaptiveLayoutInfo
             }
 
@@ -305,17 +387,30 @@ fun ApexIeltsApp(
                             .widthIn(max = 560.dp)
                     )
 
+                    // Subtle Celebratory Daily KPI Completion & Streak Evolution Banner
+                    KpiCelebrationBannerOverlay(
+                        banner = uiState.kpiCelebrationBanner,
+                        visualStyle = uiState.streakStatus.visualStyle,
+                        onDismiss = viewModel::dismissKpiCelebrationBanner,
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .widthIn(max = 560.dp)
+                    )
+
                     // Focused Actionable Notification Center ("Trung tâm thông báo") via Header Bell Icon
                     if (uiState.isNotificationSheetOpen) {
+                        val totalVocabDue = (uiState.srsReviewWords.map { it.id } + uiState.unlearnedActiveModuleWords.map { it.id }).toSet().size
                         NotificationCenterSheet(
                             activeModule = uiState.activeModule,
-                            dueSrsWords = uiState.srsReviewWords,
-                            unlearnedModuleWords = uiState.unlearnedActiveModuleWords,
-                            notificationPrefs = uiState.notificationPrefs,
-                            todayWeekdayId = uiState.todayWeekdayId,
-                            recommendedExam = uiState.authenticExams.firstOrNull(),
-                            hasCompletedActiveModule = uiState.completedModuleIds.contains(uiState.activeModuleId),
+                            visibleNotifications = uiState.visibleNotifications,
+                            totalVocabDueCount = totalVocabDue,
+                            centerState = uiState.notificationCenterState,
                             unreadCount = uiState.notificationUnreadCount,
+                            onMarkNotificationRead = viewModel::markNotificationRead,
+                            onMarkAllRead = viewModel::markAllNotificationsRead,
+                            onDismissNotification = viewModel::dismissNotification,
+                            onClearAllNotifications = viewModel::clearAllNotifications,
+                            onToggleNotificationSound = viewModel::toggleNotificationSound,
                             onJumpToLearn = { viewModel.selectTab(StudyTab.LEARN) },
                             onJumpToExams = {
                                 viewModel.selectExamSubTab(ExamHubSubTab.SIMULATION)
@@ -337,6 +432,8 @@ fun ApexIeltsApp(
                             onPickCustomBackgroundUri = viewModel::setCustomBackgroundImageUri,
                             onClearCustomBackground = viewModel::clearCustomBackgroundImage,
                             onOverlayOpacityChange = viewModel::setBackgroundOverlayOpacity,
+                            onGlassmorphismChange = viewModel::setGlassmorphismEnabled,
+                            onGlassFrostOpacityChange = viewModel::setGlassFrostOpacity,
                             onAutoDarkExamChange = viewModel::setAutoDarkInExamRoom,
                             onResetDefault = viewModel::resetThemeToDefault,
                             onClose = viewModel::closeThemeSheet,
@@ -353,6 +450,7 @@ fun ApexIeltsApp(
                             storageCounts = uiState.storageCounts,
                             cloudSyncState = uiState.cloudSyncState,
                             notificationPrefs = uiState.notificationPrefs,
+                            notificationCenterState = uiState.notificationCenterState,
                             userProfile = uiState.userProfile,
                             audioBlobs = uiState.audioBlobs,
                             studyLogs = uiState.studyLogs,
@@ -360,13 +458,17 @@ fun ApexIeltsApp(
                             googleCseCx = uiState.googleCseCx,
                             streakVisualStyle = uiState.streakStatus.visualStyle,
                             currentStreakDays = uiState.streakDays,
+                            autoKpi = uiState.autoKpi,
                             focusScheduleSection = uiState.settingsFocusSchedule,
                             onSheetUrlChange = viewModel::updateGoogleSheetUrl,
                             onSyncNow = viewModel::syncGoogleSheetsNow,
                             onSaveGoogleCseConfig = viewModel::saveGoogleCseConfig,
                             onSelectStreakVisualStyle = viewModel::selectStreakVisualStyle,
+                            onUpdateDailyKpiTargets = viewModel::updateDailyKpiTargets,
                             onOpenAvatarPicker = viewModel::openAvatarPicker,
                             onMasterReminderEnabledChange = viewModel::setMasterReminderEnabled,
+                            onNotificationSoundEnabledChange = viewModel::setNotificationSoundEnabled,
+                            onSelectNotificationSound = viewModel::updateNotificationSound,
                             onSaveVocabSlot = viewModel::saveReminderSlot,
                             onToggleVocabSlot = viewModel::toggleReminderSlot,
                             onDeleteVocabSlot = viewModel::deleteReminderSlot,
@@ -400,13 +502,12 @@ fun ApexIeltsApp(
                         )
                     }
 
-                    // Compact Streak Progress & 6-Stage Evolution Bottom Sheet
+                    // Compact Streak Progress & 6-Stage Evolution Bottom Sheet (Read-Only Auto KPI)
                     if (uiState.isStreakSheetOpen) {
                         StreakProgressSheet(
                             streakStatus = uiState.streakStatus,
-                            completedHabitIds = uiState.completedHabitIds,
+                            autoKpi = uiState.autoKpi,
                             onSelectVisualStyle = viewModel::selectStreakVisualStyle,
-                            onToggleDailyHabit = viewModel::toggleDailyHabit,
                             onDismiss = viewModel::closeStreakSheet
                         )
                     }
@@ -444,22 +545,25 @@ fun ApexIeltsApp(
                     }
 
                     // Dedicated Fullscreen "Tài liệu cá nhân & Tự học" Workspace Overlay (opened from Sidebar Drawer)
+                    // Strict pedagogical guardrail: Self-Study Article Reader always uses solid high-contrast surfaces
                     if (uiState.isPersonalLibraryOpen) {
-                        PersonalLibraryScreen(
-                            uiState = uiState,
-                            onClose = viewModel::closePersonalLibrary,
-                            onOpenBulkImporter = { viewModel.openAddMaterialsSheet() },
-                            onSaveMaterial = viewModel::savePersonalMaterial,
-                            onDeleteMaterial = viewModel::deletePersonalMaterial,
-                            onUploadMaterialAudio = viewModel::uploadMaterialAudio,
-                            onSaveHighlightFlashcard = viewModel::saveHighlightAsFlashcard,
-                            onSummarizeMaterialWithAi = viewModel::summarizePersonalMaterialWithAi,
-                            onLogSelfStudySession = viewModel::logSelfStudySession,
-                            onJumpToModuleLearn = viewModel::jumpToModuleLearnFromLibrary,
-                            onStartPersonalExam = viewModel::startPersonalExamFromLibrary,
-                            onShowMessage = viewModel::showQuickToast,
-                            modifier = Modifier.fillMaxSize()
-                        )
+                        CompositionLocalProvider(LocalGlassmorphismDisabled provides true) {
+                            PersonalLibraryScreen(
+                                uiState = uiState,
+                                onClose = viewModel::closePersonalLibrary,
+                                onOpenBulkImporter = { viewModel.openAddMaterialsSheet() },
+                                onSaveMaterial = viewModel::savePersonalMaterial,
+                                onDeleteMaterial = viewModel::deletePersonalMaterial,
+                                onUploadMaterialAudio = viewModel::uploadMaterialAudio,
+                                onSaveHighlightFlashcard = viewModel::saveHighlightAsFlashcard,
+                                onSummarizeMaterialWithAi = viewModel::summarizePersonalMaterialWithAi,
+                                onLogSelfStudySession = viewModel::logSelfStudySession,
+                                onJumpToModuleLearn = viewModel::jumpToModuleLearnFromLibrary,
+                                onStartPersonalExam = viewModel::startPersonalExamFromLibrary,
+                                onShowMessage = viewModel::showQuickToast,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
                     }
 
                     // In-App CSV / JSON Bulk Importer Bottom Sheet (4 Datasets + Live Preview Table)
@@ -512,7 +616,6 @@ private fun ApexTabContent(
                 uiState = uiState,
                 onSelectModule = viewModel::selectModule,
                 onToggleModuleCompletion = viewModel::toggleModuleCompletion,
-                onToggleDailyHabit = viewModel::toggleDailyHabit,
                 onCycleTip = viewModel::cycleDailyTip,
                 onTeacherTap = viewModel::cycleTeacherMood,
                 onOpenNotificationSheet = viewModel::openNotificationSheet,
@@ -530,9 +633,11 @@ private fun ApexTabContent(
                 onMarkWordStudied = viewModel::markWordStudied,
                 onAddWordToSrs = viewModel::pushWordToSrsQueue,
                 onMarkSrsMastered = viewModel::markSrsWordMastered,
+                onReviewSrsSm2 = viewModel::reviewSrsWordSm2,
                 onEvaluateSentence = viewModel::evaluateUserSentence,
                 onResetSentenceAi = viewModel::resetSentenceAiState,
                 onSyntaxSolved = viewModel::onSyntaxExerciseSolved,
+                onMiniGameWordCorrect = viewModel::onMiniGameWordCorrect,
                 onMiniGameCompleted = viewModel::onMiniGameCompleted,
                 onShowMessage = viewModel::showQuickToast,
                 onReturnToRoadmap = { viewModel.selectTab(StudyTab.ROADMAP) }
@@ -581,15 +686,34 @@ private fun ApexBottomNavigationBar(
     selectedTab: StudyTab,
     onSelectTab: (StudyTab) -> Unit
 ) {
+    val glassOn = isGlassmorphismActive()
+    val navContainerColor = if (glassOn) {
+        CardWhite.copy(alpha = resolvedGlassAlpha(boostAlpha = 0.04f))
+    } else {
+        CardWhite
+    }
+    val luminousBrush = glassLuminousBorderBrush()
+
     NavigationBar(
-        containerColor = CardWhite,
+        containerColor = navContainerColor,
         tonalElevation = 0.dp,
         windowInsets = NavigationBarDefaults.windowInsets,
         modifier = Modifier
             .shadow(
-                elevation = 16.dp,
+                elevation = if (glassOn) 12.dp else 16.dp,
                 ambientColor = ThemePrimary.copy(alpha = 0.14f),
                 spotColor = ThemePrimary.copy(alpha = 0.18f)
+            )
+            .then(
+                if (glassOn) {
+                    Modifier.border(
+                        width = 1.dp,
+                        brush = luminousBrush,
+                        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+                    )
+                } else {
+                    Modifier
+                }
             )
             .testTag("bottom_navigation_bar")
     ) {
@@ -623,7 +747,9 @@ private fun ApexBottomNavigationBar(
                     unselectedIconColor = InkMuted,
                     unselectedTextColor = InkMuted
                 ),
-                modifier = Modifier.testTag("nav_tab_${tab.routeId}")
+                modifier = Modifier
+                    .tactilePress(pressedScale = 0.94f)
+                    .testTag("nav_tab_${tab.routeId}")
             )
         }
     }
@@ -634,8 +760,15 @@ private fun ApexNavigationRail(
     selectedTab: StudyTab,
     onSelectTab: (StudyTab) -> Unit
 ) {
+    val glassOn = isGlassmorphismActive()
+    val railContainerColor = if (glassOn) {
+        CardWhite.copy(alpha = resolvedGlassAlpha(boostAlpha = 0.04f))
+    } else {
+        CardWhite
+    }
+
     NavigationRail(
-        containerColor = CardWhite,
+        containerColor = railContainerColor,
         modifier = Modifier
             .statusBarsPadding()
             .displayCutoutPadding()
@@ -673,7 +806,9 @@ private fun ApexNavigationRail(
                     unselectedIconColor = InkMuted,
                     unselectedTextColor = InkMuted
                 ),
-                modifier = Modifier.testTag("rail_tab_${tab.routeId}")
+                modifier = Modifier
+                    .tactilePress(pressedScale = 0.94f)
+                    .testTag("rail_tab_${tab.routeId}")
             )
         }
         Spacer(modifier = Modifier.weight(1f))
@@ -696,6 +831,103 @@ private fun ApexSnackbarHost(
             contentColor = ThemeOnPrimary,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
         )
+    }
+}
+
+@Composable
+private fun KpiCelebrationBannerOverlay(
+    banner: KpiCelebrationBanner?,
+    visualStyle: StreakVisualStyle,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    AnimatedVisibility(
+        visible = banner != null,
+        enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(tween(260)),
+        exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(tween(220)),
+        modifier = modifier
+            .statusBarsPadding()
+            .displayCutoutPadding()
+            .padding(horizontal = 14.dp, vertical = 10.dp)
+    ) {
+        if (banner != null) {
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = CardWhite,
+                border = BorderStroke(1.5.dp, EmeraldSuccess.copy(alpha = 0.55f)),
+                shadowElevation = 10.dp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(20.dp))
+                    .clickable(onClick = onDismiss)
+                    .testTag("kpi_celebration_banner")
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(EmeraldSuccessLight.copy(alpha = 0.42f))
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(11.dp)
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = CardWhite,
+                        border = BorderStroke(1.dp, EmeraldSuccess.copy(alpha = 0.35f)),
+                        modifier = Modifier.size(44.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            MasteryStreakIcon(
+                                streakDays = banner.streakDays,
+                                style = visualStyle,
+                                size = 34.dp,
+                                contentDescriptionText = "Chuỗi ${banner.streakDays} ngày"
+                            )
+                        }
+                    }
+
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        Text(
+                            text = banner.messageVi,
+                            style = MaterialTheme.typography.labelLarge.copy(
+                                fontFamily = PlusJakartaSansFontFamily,
+                                fontWeight = FontWeight.ExtraBold
+                            ),
+                            color = EmeraldOnContainer
+                        )
+                        val stageTitle = banner.evolvedStageTitleVi
+                        if (!stageTitle.isNullOrBlank()) {
+                            Text(
+                                text = "Tiến hóa cấp độ mới: $stageTitle!",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = InkPrimary
+                            )
+                        } else {
+                            Text(
+                                text = "KPI tự động 100% • Đã ghi nhận +1 chuỗi hôm nay",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = InkSecondary
+                            )
+                        }
+                    }
+
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Close,
+                            contentDescription = "Đóng thông báo chúc mừng",
+                            tint = InkSecondary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 

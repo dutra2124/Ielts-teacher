@@ -240,7 +240,9 @@ data class AppThemePreferences(
     val customSurfaceHex: Long? = null,
     val wallpaperPattern: AppWallpaperPattern = AppWallpaperPattern.NONE,
     val customBackgroundPath: String = "",
-    val backgroundOverlayOpacity: Float = 0.35f
+    val backgroundOverlayOpacity: Float = 0.35f,
+    val glassmorphismEnabled: Boolean = false,
+    val glassFrostOpacity: Float = 0.82f
 ) {
     val effectivePrimaryColor: Color
         get() = customPrimaryHex?.let { Color(it) } ?: preset.primaryColor
@@ -252,7 +254,9 @@ data class AppThemePreferences(
         get() = customSurfaceHex?.let { ThemeContrastUtils.isDarkColor(Color(it)) } ?: preset.isDark
 
     val hasCustomVisualBackground: Boolean
-        get() = customBackgroundPath.isNotBlank() || wallpaperPattern != AppWallpaperPattern.NONE
+        get() = customBackgroundPath.isNotBlank() ||
+            wallpaperPattern != AppWallpaperPattern.NONE ||
+            glassmorphismEnabled
 }
 
 typealias AppThemeState = AppThemePreferences

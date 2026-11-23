@@ -68,7 +68,12 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.material.icons.rounded.BlurOn
+import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.ui.unit.sp
+import com.example.ui.components.GlassSurface
+import com.example.ui.components.tactilePress
 import com.example.ui.theme.AppBackgroundBackdrop
 import com.example.ui.theme.AppThemePreferences
 import com.example.ui.theme.AppThemePreset
@@ -113,6 +118,8 @@ fun ThemeSettingsScreen(
     onPickCustomBackgroundUri: (Uri) -> Unit,
     onClearCustomBackground: () -> Unit,
     onOverlayOpacityChange: (Float) -> Unit,
+    onGlassmorphismChange: (Boolean) -> Unit = {},
+    onGlassFrostOpacityChange: (Float) -> Unit = {},
     onAutoDarkExamChange: (Boolean) -> Unit,
     onResetDefault: () -> Unit,
     onClose: () -> Unit,
@@ -486,6 +493,141 @@ fun ThemeSettingsScreen(
                     }
                 }
 
+                // 4.5. SELECTIVE GLASSMORPHISM UI MODE (OPTIONAL, DEFAULT OFF)
+                SectionCard(
+                    icon = Icons.Rounded.BlurOn,
+                    title = "Phong cách kính mờ (Glassmorphism)",
+                    subtitle = "Hiệu ứng thẻ mờ tinh tế với viền sáng — luôn đảm bảo chữ sắc nét"
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = SurfaceCanvas,
+                            border = BorderStroke(
+                                width = if (prefs.glassmorphismEnabled) 1.5.dp else 1.dp,
+                                color = if (prefs.glassmorphismEnabled) ThemePrimary else CardBorderSoft
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                                ) {
+                                    Text(
+                                        text = "Bật phong cách kính mờ (Glassmorphism)",
+                                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                        color = InkPrimary
+                                    )
+                                    Text(
+                                        text = if (prefs.glassmorphismEnabled) {
+                                            "Đang bật trên thẻ Dashboard, thanh điều hướng & Sidebar."
+                                        } else {
+                                            "Mặc định tắt — bật để trải nghiệm chiều sâu kính mờ hiện đại."
+                                        },
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = InkSecondary
+                                    )
+                                }
+                                Switch(
+                                    checked = prefs.glassmorphismEnabled,
+                                    onCheckedChange = onGlassmorphismChange,
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = ThemeOnPrimary,
+                                        checkedTrackColor = ThemePrimary
+                                    ),
+                                    modifier = Modifier.testTag("theme_glassmorphism_switch")
+                                )
+                            }
+                        }
+
+                        AnimatedVisibility(visible = prefs.glassmorphismEnabled) {
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = SurfaceCanvas,
+                                border = BorderStroke(1.dp, CardBorderSoft)
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "Độ đục lớp kính (Frost Opacity)",
+                                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                            color = InkPrimary
+                                        )
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = CardSurfaceTinted
+                                        ) {
+                                            Text(
+                                                text = "${(prefs.glassFrostOpacity.coerceIn(0.70f, 0.92f) * 100f).roundToInt()}%",
+                                                style = MaterialTheme.typography.labelMedium.copy(
+                                                    fontFamily = PlusJakartaSansFontFamily,
+                                                    fontWeight = FontWeight.ExtraBold
+                                                ),
+                                                color = IndigoOnSurface,
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                            )
+                                        }
+                                    }
+                                    Slider(
+                                        value = prefs.glassFrostOpacity.coerceIn(0.70f, 0.92f),
+                                        onValueChange = onGlassFrostOpacityChange,
+                                        valueRange = 0.70f..0.92f,
+                                        colors = SliderDefaults.colors(
+                                            thumbColor = ThemePrimary,
+                                            activeTrackColor = ThemePrimary,
+                                            inactiveTrackColor = CardBorderSoft
+                                        ),
+                                        modifier = Modifier.testTag("theme_glass_frost_slider")
+                                    )
+                                    Text(
+                                        text = "Giới hạn an toàn 70%–92% (bề mặt luôn giữ độ đục tối thiểu >= 72%) để bảo vệ thị lực.",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = InkMuted
+                                    )
+                                }
+                            }
+                        }
+
+                        // Strict pedagogical guardrail badge
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(CardSurfaceTinted.copy(alpha = 0.7f))
+                                .padding(horizontal = 10.dp, vertical = 8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Shield,
+                                contentDescription = null,
+                                tint = IndigoOnSurface,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = "Bảo vệ trải nghiệm học thuật: Phòng thi CD-IELTS, bài đọc Reading dài, Trình đọc tự học và khung viết Writing luôn giữ nền đặc rõ nét.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = InkSecondary
+                            )
+                        }
+                    }
+                }
+
                 // 5. CD-IELTS EXAM ROOM REALISTIC MODE GUARANTEE
                 Surface(
                     shape = RoundedCornerShape(20.dp),
@@ -545,6 +687,7 @@ fun ThemeSettingsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .minimumInteractiveComponentSize()
+                        .tactilePress()
                         .testTag("theme_sheet_done_btn")
                 ) {
                     Icon(Icons.Rounded.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -631,12 +774,14 @@ private fun LiveThemePreviewCard(
                         }
                     }
 
-                    // Sample Foreground Card inside Live Preview
-                    Surface(
+                    // Sample Foreground Card inside Live Preview (frosted glass when enabled, solid button)
+                    GlassSurface(
                         shape = RoundedCornerShape(18.dp),
-                        color = CardWhite,
-                        border = BorderStroke(if (palette.isHighContrast) 1.75.dp else 1.dp, CardBorderSoft),
-                        shadowElevation = 4.dp,
+                        solidColor = CardWhite,
+                        solidBorder = BorderStroke(if (palette.isHighContrast) 1.75.dp else 1.dp, CardBorderSoft),
+                        solidShadowElevation = 4.dp,
+                        forceGlassPreview = prefs.glassmorphismEnabled && !palette.isHighContrast,
+                        previewFrostAlpha = prefs.glassFrostOpacity,
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(

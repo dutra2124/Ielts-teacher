@@ -166,6 +166,17 @@ data class StreakIncrementOutcome(
     val didIncrementToday: Boolean
 )
 
+data class StreakCompletionResult(
+    val previousStreak: Int,
+    val newStreak: Int,
+    val newLastKpiDateIso: String,
+    val didIncrementToday: Boolean,
+    val previousLevel: StreakMasteryLevel,
+    val newLevel: StreakMasteryLevel,
+    val didEvolveMilestone: Boolean,
+    val celebrationMessageVi: String
+)
+
 /**
  * Strict Daily KPI Streak Engine (compatible with API 24+ using normalized local calendar-day arithmetic):
  * - Initializes at 0 days for new users (never increments on login or app launch).
@@ -313,6 +324,43 @@ object StreakManager {
             newStreak = (baseStreak + 1).coerceAtMost(999),
             newLastKpiDateIso = todayIso,
             didIncrementToday = true
+        )
+    }
+
+    /**
+     * Automatic Daily KPI completion entry point invoked when BOTH automatic criteria
+     * (dailyWordsLearned >= targetWordsPerDay AND dailyStudySeconds >= targetMinutesPerDay * 60)
+     * reach 100% for the current calendar date.
+     */
+    fun onDailyKpiCompleted(
+        storedStreak: Int,
+        lastKpiCompletedDate: String,
+        todayIso: String = todayIsoDate()
+    ): StreakCompletionResult {
+        val cleanLast = lastKpiCompletedDate.trim()
+        val effectiveBefore = if (cleanLast.isNotBlank() && daysBetweenIso(cleanLast, todayIso) > 3) {
+            0
+        } else {
+            storedStreak.coerceAtLeast(0)
+        }
+        val prevLevel = StreakMasteryLevel.fromStreak(effectiveBefore)
+        val outcome = applyDailyKpiCompletion(
+            storedStreak = storedStreak,
+            lastKpiCompletedDate = lastKpiCompletedDate,
+            todayIso = todayIso
+        )
+        val newLevel = StreakMasteryLevel.fromStreak(outcome.newStreak)
+        val evolved = outcome.didIncrementToday && newLevel.stageIndex > prevLevel.stageIndex
+        val message = "Chúc mừng! Bạn đã hoàn thành KPI hôm nay — Chuỗi đạt ${outcome.newStreak} ngày!"
+        return StreakCompletionResult(
+            previousStreak = effectiveBefore,
+            newStreak = outcome.newStreak,
+            newLastKpiDateIso = outcome.newLastKpiDateIso,
+            didIncrementToday = outcome.didIncrementToday,
+            previousLevel = prevLevel,
+            newLevel = newLevel,
+            didEvolveMilestone = evolved,
+            celebrationMessageVi = message
         )
     }
 

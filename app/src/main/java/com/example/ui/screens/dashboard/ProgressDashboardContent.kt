@@ -199,9 +199,11 @@ fun ProgressDashboardContent(
                 onOpenStreakSheet = onOpenStreakSheet
             )
 
-            // 3. 28-Day Study Consistency Heatmap ("Lịch nhiệt 28 ngày")
+            // 3. 28-Day Study Consistency Heatmap ("Lịch nhiệt 28 ngày") — compact & collapsible on phones
             ConsistencyHeatmapCard(
-                heatmapDays = snapshot.heatmapDays
+                heatmapDays = snapshot.heatmapDays,
+                collapsible = true,
+                initiallyExpanded = layoutInfo.useMultiColumnGrid
             )
 
             // 4. Weekly Study Activity Vertical Bar Chart (T2-CN vs Daily Target)

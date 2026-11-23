@@ -8,6 +8,7 @@ import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import com.example.data.AutoKpiInteractionBus
 import java.util.Locale
 import kotlin.math.max
 import kotlin.math.min
@@ -42,18 +43,35 @@ class ApexTtsController(
     private var sequenceOnLine: ((Int) -> Unit)? = null
     private var sequenceOnComplete: (() -> Unit)? = null
     private var isPlayingSequence: Boolean = false
+    private var sequenceLoopStart: Int? = null
+    private var sequenceLoopEnd: Int? = null
 
     init {
         tts = TextToSpeech(context.applicationContext) { status ->
             isReady = (status == TextToSpeech.SUCCESS)
             tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                override fun onStart(utteranceId: String?) = Unit
+                override fun onStart(utteranceId: String?) {
+                    AutoKpiInteractionBus.notifyInteraction()
+                }
 
                 override fun onDone(utteranceId: String?) {
+                    AutoKpiInteractionBus.notifyInteraction()
                     mainHandler.post {
                         if (isPlayingSequence && utteranceId?.startsWith("seq_") == true) {
+                            val loopA = sequenceLoopStart
+                            val loopB = sequenceLoopEnd
+                            val hasAbLoop = loopA != null && loopB != null &&
+                                loopA in sequenceLines.indices &&
+                                loopB in sequenceLines.indices &&
+                                loopA <= loopB
                             val nextIdx = sequenceIndex + 1
-                            if (nextIdx < sequenceLines.size) {
+                            if (hasAbLoop && loopA != null && loopB != null) {
+                                if (nextIdx <= loopB) {
+                                    playSequenceIndex(nextIdx)
+                                } else {
+                                    playSequenceIndex(loopA)
+                                }
+                            } else if (nextIdx < sequenceLines.size) {
                                 playSequenceIndex(nextIdx)
                             } else {
                                 isPlayingSequence = false
@@ -81,6 +99,7 @@ class ApexTtsController(
     }
 
     fun speak(text: String, accent: EnglishAccent, speechRate: Float = 0.90f) {
+        AutoKpiInteractionBus.notifyInteraction()
         isPlayingSequence = false
         sequenceIndex = -1
         val engine = tts
@@ -99,6 +118,8 @@ class ApexTtsController(
         startIndex: Int = 0,
         accent: EnglishAccent = EnglishAccent.UK,
         speechRate: Float = 1.0f,
+        loopStartIndex: Int? = null,
+        loopEndIndex: Int? = null,
         onLineStarted: (Int) -> Unit,
         onComplete: () -> Unit
     ) {
@@ -113,13 +134,26 @@ class ApexTtsController(
         sequenceRate = speechRate.coerceIn(0.65f, 1.5f)
         sequenceOnLine = onLineStarted
         sequenceOnComplete = onComplete
+        sequenceLoopStart = loopStartIndex?.coerceIn(0, lines.lastIndex)
+        sequenceLoopEnd = loopEndIndex?.coerceIn(0, lines.lastIndex)
         isPlayingSequence = true
         playSequenceIndex(startIndex.coerceIn(0, lines.lastIndex))
+    }
+
+    fun updateSequenceLoop(loopStartIndex: Int?, loopEndIndex: Int?) {
+        if (sequenceLines.isEmpty()) {
+            sequenceLoopStart = null
+            sequenceLoopEnd = null
+            return
+        }
+        sequenceLoopStart = loopStartIndex?.coerceIn(0, sequenceLines.lastIndex)
+        sequenceLoopEnd = loopEndIndex?.coerceIn(0, sequenceLines.lastIndex)
     }
 
     private fun playSequenceIndex(index: Int) {
         val engine = tts ?: return
         if (!isPlayingSequence || index !in sequenceLines.indices) return
+        AutoKpiInteractionBus.notifyInteraction()
         sequenceIndex = index
         engine.language = sequenceAccent.locale
         engine.setSpeechRate(sequenceRate)
@@ -136,6 +170,8 @@ class ApexTtsController(
     fun stop() {
         isPlayingSequence = false
         sequenceIndex = -1
+        sequenceLoopStart = null
+        sequenceLoopEnd = null
         tts?.stop()
         onSpeakingChanged(null)
     }

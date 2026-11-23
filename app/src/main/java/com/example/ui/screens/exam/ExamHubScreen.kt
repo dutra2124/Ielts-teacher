@@ -282,10 +282,10 @@ fun ExamHubScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Icon(Icons.Rounded.Schedule, contentDescription = null, tint = CdIeltsTopbar, modifier = Modifier.size(17.dp))
+                        Icon(Icons.Rounded.Schedule, contentDescription = null, tint = CdIeltsTopbar, modifier = Modifier.size(16.dp))
                         Text(
-                            text = "Chọn chế độ thi & thời gian chuẩn thực tế:",
-                            style = MaterialTheme.typography.titleSmall,
+                            text = "Chế độ thi:",
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
                             color = InkPrimary
                         )
                     }
@@ -380,77 +380,65 @@ private fun ExamHubHeroHeader(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(bottomStart = 30.dp, bottomEnd = 30.dp))
+            .clip(RoundedCornerShape(bottomStart = 22.dp, bottomEnd = 22.dp))
             .background(heroBrush)
             .statusBarsPadding()
             .displayCutoutPadding()
-            .padding(horizontal = hPad, vertical = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .padding(horizontal = hPad, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(9.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Column(
+            Row(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Surface(
-                    shape = RoundedCornerShape(50),
-                    color = Color.White.copy(alpha = 0.16f),
-                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.28f))
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp),
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (isCorrection) Icons.Rounded.AutoFixHigh else Icons.Rounded.Shield,
-                            contentDescription = null,
-                            tint = if (isCorrection) Color(0xFFFDE047) else Color(0xFF38BDF8),
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Text(
-                            text = if (isCorrection) {
-                                "Chữa đề chuyên sâu • AI Examiner 8.5+"
-                            } else {
-                                "CD-IELTS Strict Mode • IDP / British Council"
-                            },
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color.White
-                        )
-                    }
-                }
-
+                Icon(
+                    imageVector = if (isCorrection) Icons.Rounded.AutoFixHigh else Icons.Rounded.Shield,
+                    contentDescription = null,
+                    tint = if (isCorrection) Color(0xFFFDE047) else Color(0xFF38BDF8),
+                    modifier = Modifier.size(20.dp)
+                )
                 Text(
                     text = if (isCorrection) {
                         stringResource(R.string.review_header_title)
                     } else {
                         stringResource(R.string.exam_hub_title)
                     },
-                    style = MaterialTheme.typography.titleLarge.copy(
+                    style = MaterialTheme.typography.titleMedium.copy(
                         fontFamily = PlusJakartaSansFontFamily,
                         fontWeight = FontWeight.ExtraBold
                     ),
-                    color = InkOnHero
-                )
-                Text(
-                    text = if (isCorrection) {
-                        stringResource(R.string.review_header_subtitle)
-                    } else {
-                        stringResource(R.string.exam_hub_subtitle)
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = InkOnHeroMuted
+                    color = InkOnHero,
+                    maxLines = 1
                 )
             }
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
+                com.example.ui.components.CompactHelpTipButton(
+                    title = if (isCorrection) "Mẹo Chữa đề AI" else "Phòng thi CD-IELTS",
+                    tips = if (isCorrection) {
+                        listOf(
+                            "Dùng thanh số câu & 'Bảng câu' để nhảy thẳng tới câu cần chữa.",
+                            "Chạm từng câu để mở 3 góc nhìn: Tip giải nhanh, Lỗi Band 6.5 & Bẫy Distractor.",
+                            "Bấm 'AI Chữa sâu câu này' để Gemini giải thích chi tiết theo đáp án của bạn."
+                        )
+                    } else {
+                        listOf(
+                            "Chọn chế độ Full Test (4 kỹ năng) hoặc thi từng kỹ năng riêng theo giờ chuẩn.",
+                            "Trong phòng thi hỗ trợ Highlight vàng, Ghi chú, thu gọn bài đọc và Bảng câu.",
+                            "Sau khi nộp bài, hệ thống tự chấm điểm và chuyển thẳng sang Chữa đề."
+                        )
+                    },
+                    testTagName = "exam_hub_help_tip"
+                )
                 ThemeQuickToggleButton(
                     mode = uiState.themePrefs.mode,
                     onClick = onOpenThemeSheet
@@ -459,34 +447,6 @@ private fun ExamHubHeroHeader(
                     isOnline = uiState.isOnline,
                     onClick = onOpenSettingsSheet
                 )
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = Color.White.copy(alpha = 0.12f),
-                    modifier = Modifier.wrapContentWidth()
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
-                    ) {
-                        Text(
-                            text = "${uiState.examHistory.size}",
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontFamily = PlusJakartaSansFontFamily,
-                                fontWeight = FontWeight.ExtraBold
-                            ),
-                            color = Color.White,
-                            maxLines = 1,
-                            softWrap = false
-                        )
-                        Text(
-                            text = "Lượt thi",
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                            color = InkOnHeroMuted,
-                            maxLines = 1,
-                            softWrap = false
-                        )
-                    }
-                }
             }
         }
 

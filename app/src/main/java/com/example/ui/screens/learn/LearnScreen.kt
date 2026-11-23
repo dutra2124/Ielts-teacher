@@ -64,6 +64,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.data.LearnSubTab
+import com.example.data.Sm2RecallQuality
 import com.example.data.VocabWordItem
 import com.example.speech.ApexTtsController
 import com.example.speech.EnglishAccent
@@ -102,9 +103,11 @@ fun LearnScreen(
     onMarkWordStudied: (String) -> Unit,
     onAddWordToSrs: (wordId: String, notify: Boolean) -> Unit,
     onMarkSrsMastered: (String) -> Unit,
+    onReviewSrsSm2: (wordId: String, quality: Sm2RecallQuality) -> Unit = { _, _ -> },
     onEvaluateSentence: (VocabWordItem, String) -> Unit,
     onResetSentenceAi: () -> Unit,
-    onSyntaxSolved: () -> Unit,
+    onSyntaxSolved: (String) -> Unit,
+    onMiniGameWordCorrect: (String) -> Unit = {},
     onMiniGameCompleted: (score: Int, total: Int, bestCombo: Int, missedCount: Int) -> Unit,
     onOpenPersonalLibrary: () -> Unit = {},
     onOpenBulkImporter: () -> Unit = {},
@@ -141,108 +144,72 @@ fun LearnScreen(
             .imePadding()
             .verticalScroll(rememberScrollState())
             .testTag("learn_screen"),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        // Indigo–Cyan Hero Header synced to activeModuleId
+        // Ultra-compact Indigo–Cyan Top Bar (maximizes active flashcard/exercise viewport)
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(bottomStart = 30.dp, bottomEnd = 30.dp))
+                .clip(RoundedCornerShape(bottomStart = 22.dp, bottomEnd = 22.dp))
                 .background(LearnIndigoCyanGradient)
-                .drawBehind {
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(Color.White.copy(alpha = 0.20f), Color.Transparent),
-                            center = Offset(size.width * 0.88f, size.height * 0.22f),
-                            radius = size.width * 0.42f
-                        ),
-                        radius = size.width * 0.42f,
-                        center = Offset(size.width * 0.88f, size.height * 0.22f)
-                    )
-                }
                 .statusBarsPadding()
                 .displayCutoutPadding()
-                .padding(horizontal = layoutInfo.horizontalPadding, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(horizontal = layoutInfo.horizontalPadding, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color.White.copy(alpha = 0.22f)
                 ) {
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Surface(
-                            shape = RoundedCornerShape(50),
-                            color = Color.White.copy(alpha = 0.22f),
-                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.34f)),
-                            modifier = Modifier.wrapContentWidth()
-                        ) {
-                            Text(
-                                text = "Module #${String.format(Locale.US, "%02d", activeModule.id)} • ${activeModule.tier.bandRange}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = Color.White,
-                                maxLines = 1,
-                                softWrap = false,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                            )
-                        }
-
-                        Surface(
-                            shape = RoundedCornerShape(50),
-                            color = Color.White.copy(alpha = 0.16f),
-                            modifier = Modifier.wrapContentWidth()
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(3.dp),
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.AutoAwesome,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(12.dp)
-                                )
-                                Text(
-                                    text = "${moduleWords.size} từ C1–C2",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = Color.White,
-                                    maxLines = 1,
-                                    softWrap = false
-                                )
-                            }
-                        }
-                    }
-
                     Text(
-                        text = activeModule.titleEn,
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontFamily = PlusJakartaSansFontFamily,
-                            fontWeight = FontWeight.ExtraBold
-                        ),
-                        color = InkOnHero,
+                        text = "M${String.format(Locale.US, "%02d", activeModule.id)}",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold),
+                        color = Color.White,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = "${stringResource(R.string.learn_header_title)} • ${activeModule.titleVi}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = InkOnHeroMuted,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        softWrap = false,
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp)
                     )
                 }
 
-                AnimatedFloatingGradCap(
-                    size = 62.dp,
-                    contentDescriptionText = "Học từ vựng Band 8.5"
+                Text(
+                    text = activeModule.titleEn,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontFamily = PlusJakartaSansFontFamily,
+                        fontWeight = FontWeight.ExtraBold
+                    ),
+                    color = InkOnHero,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = Color.White.copy(alpha = 0.18f)
+                ) {
+                    Text(
+                        text = "${moduleWords.size} từ",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = Color.White,
+                        maxLines = 1,
+                        softWrap = false,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+
+                com.example.ui.components.CompactHelpTipButton(
+                    title = "Mẹo học Module #${String.format(Locale.US, "%02d", activeModule.id)}",
+                    tips = listOf(
+                        "Chạm thẻ từ để lật 3D xem nghĩa, collocations & lỗi Band 6.0.",
+                        "Bấm UK/US để nghe phát âm và thử Micro chấm phát âm ngay.",
+                        "Lưu từ khó vào SRS hoặc chuyển sang Đặt câu AI để nhớ lâu hơn."
+                    ),
+                    testTagName = "learn_help_tip_button"
                 )
             }
 
@@ -263,8 +230,12 @@ fun LearnScreen(
             when (subTab) {
                 LearnSubTab.VOCAB_GRAMMAR -> FlashcardSubTab(
                     words = moduleWords,
+                    allVocabulary = uiState.allMergedVocabulary,
+                    activeModuleId = activeModule.id,
                     selectedIndex = selectedWordIndex,
                     srsWordIds = uiState.srsWordIds,
+                    learnedVocabIds = uiState.learnedVocabIds,
+                    dailyLearnedWordIds = uiState.autoKpi.dailyLearnedWordIds,
                     speakingAccent = speakingAccent,
                     ttsController = ttsController,
                     topicHintEn = activeModule.titleEn,
@@ -304,10 +275,13 @@ fun LearnScreen(
                 LearnSubTab.GAME_SRS -> GameAndSrsSubTab(
                     moduleWords = moduleWords,
                     srsReviewWords = uiState.srsReviewWords,
+                    srsSchedules = uiState.srsSchedules,
                     ttsController = ttsController,
                     onMissedWord = { wordId -> onAddWordToSrs(wordId, false) },
+                    onWordCorrect = onMiniGameWordCorrect,
                     onGameCompleted = onMiniGameCompleted,
-                    onMarkSrsMastered = onMarkSrsMastered
+                    onMarkSrsMastered = onMarkSrsMastered,
+                    onReviewSrsSm2 = onReviewSrsSm2
                 )
             }
         }

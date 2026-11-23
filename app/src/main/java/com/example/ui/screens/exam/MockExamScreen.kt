@@ -33,6 +33,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -45,6 +48,8 @@ import androidx.compose.material.icons.rounded.Contrast
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.DragHandle
 import androidx.compose.material.icons.rounded.EditNote
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.LightMode
@@ -77,6 +82,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -92,6 +99,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.example.R
+import com.example.data.SavedWritingDraft
+import com.example.data.WritingDraftStore
+import com.example.ui.components.WritingCriteriaChecklistCard
+import com.example.ui.components.WritingWordCountAndDraftBar
 import com.example.data.ActiveExamSession
 import com.example.data.ExamAttemptRecord
 import com.example.data.ExamQuestionItem
@@ -102,6 +113,10 @@ import com.example.data.ExamSkillMode
 import com.example.speech.ApexPronunciationEvaluator
 import com.example.speech.ApexTtsController
 import com.example.speech.EnglishAccent
+import com.example.ui.components.CollapsibleQuestionAccordionCard
+import com.example.ui.components.QuestionNavigatorBar
+import com.example.ui.components.QuestionNavigatorPalette
+import com.example.ui.components.QuestionStatusItem
 import com.example.ui.theme.CdIeltsBorder
 import com.example.ui.theme.CdIeltsDarkApexColors
 import com.example.ui.theme.CdIeltsHighContrastBg
@@ -109,6 +124,7 @@ import com.example.ui.theme.CdIeltsHighContrastText
 import com.example.ui.theme.CdIeltsSurface
 import com.example.ui.theme.CdIeltsTopbar
 import com.example.ui.theme.CdIeltsVisualMode
+import com.example.ui.theme.EmeraldSuccess
 import com.example.ui.theme.GoldMastery
 import com.example.ui.theme.HighlightYellow
 import com.example.ui.theme.HighlightYellowBorder
@@ -120,6 +136,7 @@ import com.example.ui.theme.LocalAdaptiveLayoutInfo
 import com.example.ui.theme.PlusJakartaSansFontFamily
 import com.example.ui.theme.RoseAlert
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.util.Locale
 
 private enum class ActiveExamSection(val labelEn: String) {
@@ -174,8 +191,9 @@ fun MockExamScreen(
     var fontScale by remember { mutableFloatStateOf(1.0f) }
     var visualMode by remember(session) { mutableStateOf(initialVisualMode) }
 
-    // Draggable vertical split-screen ratio (0.28f..0.72f)
+    // Draggable vertical split-screen ratio (0.28f..0.72f) & 1-tap passage collapse
     var splitRatio by remember { mutableFloatStateOf(0.47f) }
+    var isPassageCollapsed by remember(currentSection) { mutableStateOf(false) }
 
     // Reading Highlight (#FEF08A) & Notes state
     var readingTool by remember { mutableStateOf(CdReadingTool.HIGHLIGHT) }
@@ -191,6 +209,15 @@ fun MockExamScreen(
     var writingTaskIndex by remember { mutableIntStateOf(0) }
     var writingTask1Draft by remember(session) { mutableStateOf("") }
     var writingTask2Draft by remember(session) { mutableStateOf("") }
+    val examDraftKey1 = remember(exam.id) { WritingDraftStore.examKey(exam.id, 0) }
+    val examDraftKey2 = remember(exam.id) { WritingDraftStore.examKey(exam.id, 1) }
+    var examDraft1SavedTime by remember(session) { mutableStateOf<String?>(null) }
+    var examDraft1Restored by remember(session) { mutableStateOf(false) }
+    var examDraft2SavedTime by remember(session) { mutableStateOf<String?>(null) }
+    var examDraft2Restored by remember(session) { mutableStateOf(false) }
+    var examSubmittedCleanly by remember(session) { mutableStateOf(false) }
+    val latestTask1DraftState = rememberUpdatedState(writingTask1Draft)
+    val latestTask2DraftState = rememberUpdatedState(writingTask2Draft)
     var speakingPromptIndex by remember { mutableIntStateOf(0) }
     var speakingTranscript by remember(session) { mutableStateOf("") }
 
@@ -227,6 +254,22 @@ fun MockExamScreen(
         }
     }
     var activeQuestionIndex by remember(currentSection) { mutableIntStateOf(0) }
+    var expandAllQuestions by remember(currentSection) { mutableStateOf(false) }
+    val questionListState = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
+
+    LaunchedEffect(currentSection) {
+        questionListState.scrollToItem(0)
+    }
+
+    fun jumpToExamQuestion(targetIdx: Int) {
+        if (sectionQuestions.isEmpty()) return
+        val clamped = targetIdx.coerceIn(0, sectionQuestions.lastIndex)
+        activeQuestionIndex = clamped
+        coroutineScope.launch {
+            questionListState.animateScrollToItem(clamped)
+        }
+    }
 
     fun stopAllAudio() {
         ttsController.stop()
@@ -286,7 +329,46 @@ fun MockExamScreen(
             objectiveAnswers = answersMap.toMap(),
             flaggedQuestionIds = flaggedIds.filterValues { it }.keys.toSet()
         )
+        examSubmittedCleanly = true
+        WritingDraftStore.clearDraft(context, examDraftKey1)
+        WritingDraftStore.clearDraft(context, examDraftKey2)
         onSubmitExam(record)
+    }
+
+    // Auto-Draft Protection for Exam Writing Task 1 & Task 2 (restore + 5-second periodic save)
+    LaunchedEffect(session) {
+        val saved1 = WritingDraftStore.loadDraft(context, examDraftKey1)
+        if (saved1 != null && saved1.text.isNotBlank()) {
+            writingTask1Draft = saved1.text
+            examDraft1SavedTime = saved1.formattedTime()
+            examDraft1Restored = true
+        }
+        val saved2 = WritingDraftStore.loadDraft(context, examDraftKey2)
+        if (saved2 != null && saved2.text.isNotBlank()) {
+            writingTask2Draft = saved2.text
+            examDraft2SavedTime = saved2.formattedTime()
+            examDraft2Restored = true
+        }
+
+        var lastPersisted1 = saved1?.text.orEmpty()
+        var lastPersisted2 = saved2?.text.orEmpty()
+        while (true) {
+            delay(5_000L)
+            val cur1 = latestTask1DraftState.value
+            if (cur1 != lastPersisted1) {
+                val ts = WritingDraftStore.saveDraft(context, examDraftKey1, cur1)
+                lastPersisted1 = cur1
+                examDraft1SavedTime = if (cur1.isNotBlank()) SavedWritingDraft(cur1, ts).formattedTime() else null
+                examDraft1Restored = false
+            }
+            val cur2 = latestTask2DraftState.value
+            if (cur2 != lastPersisted2) {
+                val ts = WritingDraftStore.saveDraft(context, examDraftKey2, cur2)
+                lastPersisted2 = cur2
+                examDraft2SavedTime = if (cur2.isNotBlank()) SavedWritingDraft(cur2, ts).formattedTime() else null
+                examDraft2Restored = false
+            }
+        }
     }
 
     // Strict Countdown Timer (flashes red < 5 minutes; auto-submits at 00:00)
@@ -305,6 +387,14 @@ fun MockExamScreen(
 
     DisposableEffect(Unit) {
         onDispose {
+            if (!examSubmittedCleanly) {
+                if (latestTask1DraftState.value.isNotBlank()) {
+                    WritingDraftStore.saveDraft(context, examDraftKey1, latestTask1DraftState.value)
+                }
+                if (latestTask2DraftState.value.isNotBlank()) {
+                    WritingDraftStore.saveDraft(context, examDraftKey2, latestTask2DraftState.value)
+                }
+            }
             stopAllAudio()
             ttsController.shutdown()
         }
@@ -771,20 +861,28 @@ fun MockExamScreen(
                                     Column(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .padding(12.dp),
-                                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                                            .padding(10.dp),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
-                                        Text(
-                                            text = "Quy định thi IELTS Listening thật: Âm thanh chỉ được phát DUY NHẤT 1 LẦN (30 phút nghe + 2 phút kiểm tra đáp án).",
-                                            style = MaterialTheme.typography.bodySmall.copy(fontSize = (12.5f * fontScale).sp),
-                                            color = secondaryText
-                                        )
-
-                                        if (exam.audioDisplayName != null) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
                                             Text(
-                                                text = "Tệp audio đính kèm: ${exam.audioDisplayName}",
-                                                style = MaterialTheme.typography.labelMedium,
+                                                text = exam.audioDisplayName ?: "Strict Listening • Phát 1 lần",
+                                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                                                 color = primaryText
+                                            )
+                                            com.example.ui.components.CompactHelpTipButton(
+                                                title = "Quy định IELTS Listening",
+                                                tips = listOf(
+                                                    "Âm thanh chỉ phát DUY NHẤT 1 LẦN theo chuẩn phòng thi thật.",
+                                                    "Bạn có thể vừa nghe vừa mở câu hỏi ở khung dưới và đánh dấu Xem lại."
+                                                ),
+                                                tint = primaryText,
+                                                containerColor = splitHandleBg,
+                                                testTagName = "exam_listening_help_tip"
                                             )
                                         }
 
@@ -930,188 +1028,236 @@ fun MockExamScreen(
             }
         }
 
+        val isObjectiveSection = currentSection == ActiveExamSection.READING || currentSection == ActiveExamSection.LISTENING
+
         val secondaryPaneContent: @Composable () -> Unit = {
             when (currentSection) {
-                        ActiveExamSection.READING, ActiveExamSection.LISTENING -> {
-                            val currentQ = sectionQuestions.getOrNull(
-                                activeQuestionIndex.coerceIn(0, (sectionQuestions.size - 1).coerceAtLeast(0))
-                            )
-                            if (currentQ != null) {
-                                CdIeltsQuestionPane(
-                                    question = currentQ,
-                                    answerValue = answersMap[currentQ.id].orEmpty(),
-                                    isFlagged = flaggedIds[currentQ.id] == true,
-                                    hasPrev = activeQuestionIndex > 0,
-                                    hasNext = activeQuestionIndex < sectionQuestions.lastIndex,
-                                    fontScale = fontScale,
+                ActiveExamSection.READING, ActiveExamSection.LISTENING -> {
+                    if (sectionQuestions.isNotEmpty()) {
+                        LazyColumn(
+                            state = questionListState,
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(vertical = 4.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            itemsIndexed(sectionQuestions, key = { _, q -> q.id }) { qIdx, q ->
+                                val ans = answersMap[q.id].orEmpty()
+                                val isFlagged = flaggedIds[q.id] == true
+                                val isExpanded = expandAllQuestions || activeQuestionIndex == qIdx
+
+                                CollapsibleQuestionAccordionCard(
+                                    questionNumber = q.number,
+                                    previewText = q.promptEn,
+                                    answerSummary = ans.takeIf { it.isNotBlank() },
+                                    isExpanded = isExpanded,
+                                    isFlagged = isFlagged,
+                                    badgeLabel = q.type.labelVi,
+                                    accentColor = selectedAccentBg,
                                     cardBg = cardBg,
                                     borderColor = borderColor,
                                     primaryText = primaryText,
                                     secondaryText = secondaryText,
-                                    onAnswerChange = { answersMap[currentQ.id] = it },
-                                    onToggleFlag = { flaggedIds[currentQ.id] = !(flaggedIds[currentQ.id] == true) },
-                                    onPrev = { activeQuestionIndex = (activeQuestionIndex - 1).coerceAtLeast(0) },
-                                    onNext = { activeQuestionIndex = (activeQuestionIndex + 1).coerceAtMost(sectionQuestions.lastIndex) }
-                                )
-                            } else {
-                                Text(
-                                    text = "Phần thi này không có câu hỏi trắc nghiệm. Hãy chuyển sang phần tiếp theo trên thanh trên cùng.",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = secondaryText
-                                )
-                            }
-                        }
-
-                        ActiveExamSection.WRITING -> {
-                            val currentDraft = if (writingTaskIndex == 0) writingTask1Draft else writingTask2Draft
-                            val wordCount = currentDraft.trim().split(Regex("\\s+")).count { it.isNotBlank() }
-                            val target = if (writingTaskIndex == 0) 150 else 250
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = "Khung viết bài — Writing Task ${writingTaskIndex + 1}",
-                                        style = MaterialTheme.typography.labelLarge,
-                                        color = primaryText
-                                    )
-                                    val wordPillBg = when {
-                                        wordCount >= target && isDarkOrHc -> Color(0xFF0E3A2F)
-                                        wordCount >= target -> Color(0xFFDCFCE7)
-                                        isDarkOrHc -> Color(0xFF1F2937)
-                                        else -> Color(0xFFE2E8F0)
-                                    }
-                                    val wordPillFg = when {
-                                        wordCount >= target && isDarkOrHc -> Color(0xFF6EE7B7)
-                                        isDarkOrHc -> primaryText
-                                        else -> Color(0xFF0F172A)
-                                    }
-                                    Surface(
-                                        shape = RoundedCornerShape(8.dp),
-                                        color = wordPillBg,
-                                        modifier = Modifier
-                                            .wrapContentWidth()
-                                            .testTag("exam_writing_word_count")
-                                    ) {
-                                        Text(
-                                            text = "Words: $wordCount / $target",
-                                            style = MaterialTheme.typography.labelMedium.copy(
-                                                fontFamily = PlusJakartaSansFontFamily,
-                                                fontWeight = FontWeight.Bold
-                                            ),
-                                            color = wordPillFg,
-                                            maxLines = 1,
-                                            softWrap = false,
-                                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
-                                        )
-                                    }
-                                }
-
-                                OutlinedTextField(
-                                    value = currentDraft,
-                                    onValueChange = {
-                                        if (writingTaskIndex == 0) writingTask1Draft = it else writingTask2Draft = it
-                                    },
-                                    minLines = 6,
-                                    placeholder = { Text("Type your IELTS Writing response here...", color = secondaryText) },
-                                    textStyle = MaterialTheme.typography.bodyMedium.copy(
-                                        fontFamily = PlusJakartaSansFontFamily,
-                                        fontSize = (14.5f * fontScale).sp,
-                                        color = primaryText
-                                    ),
-                                    shape = RoundedCornerShape(10.dp),
-                                    colors = OutlinedTextFieldDefaults.colors(
-                                        focusedBorderColor = borderColor,
-                                        unfocusedBorderColor = borderColor,
-                                        focusedContainerColor = cardBg,
-                                        unfocusedContainerColor = cardBg
-                                    ),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .testTag("exam_writing_editor")
-                                )
-                            }
-                        }
-
-                        ActiveExamSection.SPEAKING -> {
-                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                Button(
-                                    onClick = {
-                                        if (isRecordingSpeaking) {
-                                            activeRecognizer?.stopListening()
-                                            isRecordingSpeaking = false
+                                    neutralSurface = pageBg,
+                                    onToggleExpand = {
+                                        if (expandAllQuestions) {
+                                            expandAllQuestions = false
+                                            activeQuestionIndex = qIdx
                                         } else {
-                                            val granted = ContextCompat.checkSelfPermission(
-                                                context,
-                                                Manifest.permission.RECORD_AUDIO
-                                            ) == PackageManager.PERMISSION_GRANTED
-                                            if (granted) {
-                                                activeRecognizer = ApexPronunciationEvaluator.startFreeSpeechRecognition(
-                                                    context = context,
-                                                    onReady = {
-                                                        isRecordingSpeaking = true
-                                                        speakingStatus = "Đang thu âm Speaking..."
-                                                    },
-                                                    onPartial = { speakingStatus = "Đang nghe: \"$it\"" },
-                                                    onResult = { spoken ->
-                                                        isRecordingSpeaking = false
-                                                        speakingStatus = "Đã ghi nhận giọng nói."
-                                                        speakingTranscript = if (speakingTranscript.isBlank()) spoken else "${speakingTranscript.trim()} $spoken"
-                                                    },
-                                                    onError = { err ->
-                                                        isRecordingSpeaking = false
-                                                        speakingStatus = err
-                                                    }
-                                                )
-                                            } else {
-                                                micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                                            }
+                                            activeQuestionIndex = if (activeQuestionIndex == qIdx) -1 else qIdx
                                         }
                                     },
-                                    shape = RoundedCornerShape(10.dp),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = if (isRecordingSpeaking) RoseAlert else CdIeltsTopbar
-                                    ),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .minimumInteractiveComponentSize()
+                                    onToggleFlag = { flaggedIds[q.id] = !isFlagged },
+                                    modifier = Modifier.testTag("exam_accordion_q_${q.number}")
                                 ) {
-                                    Icon(
-                                        imageVector = if (isRecordingSpeaking) Icons.Rounded.Stop else Icons.Rounded.Mic,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(18.dp)
+                                    CdIeltsQuestionBody(
+                                        question = q,
+                                        answerValue = ans,
+                                        hasPrev = qIdx > 0,
+                                        hasNext = qIdx < sectionQuestions.lastIndex,
+                                        fontScale = fontScale,
+                                        cardBg = cardBg,
+                                        borderColor = borderColor,
+                                        primaryText = primaryText,
+                                        secondaryText = secondaryText,
+                                        selectedAccentBg = selectedAccentBg,
+                                        onAnswerChange = { answersMap[q.id] = it },
+                                        onPrev = { jumpToExamQuestion(qIdx - 1) },
+                                        onNext = { jumpToExamQuestion(qIdx + 1) }
                                     )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(if (isRecordingSpeaking) "Dừng thu âm Speaking" else "Bắt đầu thu âm trả lời")
                                 }
-
-                                speakingStatus?.let { msg ->
-                                    Text(msg, style = MaterialTheme.typography.bodySmall, color = secondaryText)
-                                }
-
-                                OutlinedTextField(
-                                    value = speakingTranscript,
-                                    onValueChange = { speakingTranscript = it },
-                                    minLines = 4,
-                                    placeholder = { Text("Transcript câu trả lời Speaking của thí sinh...", color = secondaryText) },
-                                    textStyle = MaterialTheme.typography.bodyMedium.copy(
-                                        fontFamily = PlusJakartaSansFontFamily,
-                                        fontSize = (14f * fontScale).sp,
-                                        color = primaryText
-                                    ),
-                                    shape = RoundedCornerShape(10.dp),
-                                    colors = OutlinedTextFieldDefaults.colors(
-                                        focusedBorderColor = borderColor,
-                                        unfocusedBorderColor = borderColor,
-                                        focusedContainerColor = cardBg,
-                                        unfocusedContainerColor = cardBg
-                                    ),
-                                    modifier = Modifier.fillMaxWidth()
-                                )
                             }
                         }
+                    } else {
+                        Text(
+                            text = "Phần thi này không có câu hỏi trắc nghiệm.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = secondaryText
+                        )
+                    }
+                }
+
+                ActiveExamSection.WRITING -> {
+                    val isTask1 = writingTaskIndex == 0
+                    val currentDraft = if (isTask1) writingTask1Draft else writingTask2Draft
+                    val wordCount = currentDraft.trim().split(Regex("\\s+")).count { it.isNotBlank() }
+                    val target = if (isTask1) 150 else 250
+                    val savedTime = if (isTask1) examDraft1SavedTime else examDraft2SavedTime
+                    val restoredFlag = if (isTask1) examDraft1Restored else examDraft2Restored
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "Writing Task ${writingTaskIndex + 1}",
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                            color = primaryText
+                        )
+
+                        WritingWordCountAndDraftBar(
+                            wordCount = wordCount,
+                            targetWords = target,
+                            lastSavedTimeLabel = savedTime,
+                            restoredFromDraft = restoredFlag,
+                            onClearDraft = {
+                                if (isTask1) {
+                                    WritingDraftStore.clearDraft(context, examDraftKey1)
+                                    writingTask1Draft = ""
+                                    examDraft1SavedTime = null
+                                    examDraft1Restored = false
+                                } else {
+                                    WritingDraftStore.clearDraft(context, examDraftKey2)
+                                    writingTask2Draft = ""
+                                    examDraft2SavedTime = null
+                                    examDraft2Restored = false
+                                }
+                            },
+                            isDarkOrHighContrast = isDarkOrHc,
+                            darkPrimaryText = primaryText,
+                            darkSecondaryText = secondaryText,
+                            modifier = Modifier.testTag("exam_writing_word_count")
+                        )
+
+                        OutlinedTextField(
+                            value = currentDraft,
+                            onValueChange = {
+                                if (isTask1) writingTask1Draft = it else writingTask2Draft = it
+                            },
+                            minLines = 6,
+                            placeholder = { Text("Type your IELTS Writing response here...", color = secondaryText) },
+                            textStyle = MaterialTheme.typography.bodyMedium.copy(
+                                fontFamily = PlusJakartaSansFontFamily,
+                                fontSize = (14.5f * fontScale).sp,
+                                color = primaryText
+                            ),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = borderColor,
+                                unfocusedBorderColor = borderColor,
+                                focusedContainerColor = cardBg,
+                                unfocusedContainerColor = cardBg
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("exam_writing_editor")
+                        )
+
+                        WritingCriteriaChecklistCard(
+                            isTask1 = isTask1,
+                            resetKey = "${exam.id}_$writingTaskIndex",
+                            cardBg = cardBg,
+                            borderColor = borderColor,
+                            primaryText = primaryText,
+                            secondaryText = secondaryText,
+                            accentColor = if (isDarkOrHc) Color(0xFF34D399) else Color(0xFF0F766E)
+                        )
+                    }
+                }
+
+                ActiveExamSection.SPEAKING -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                if (isRecordingSpeaking) {
+                                    activeRecognizer?.stopListening()
+                                    isRecordingSpeaking = false
+                                } else {
+                                    val granted = ContextCompat.checkSelfPermission(
+                                        context,
+                                        Manifest.permission.RECORD_AUDIO
+                                    ) == PackageManager.PERMISSION_GRANTED
+                                    if (granted) {
+                                        activeRecognizer = ApexPronunciationEvaluator.startFreeSpeechRecognition(
+                                            context = context,
+                                            onReady = {
+                                                isRecordingSpeaking = true
+                                                speakingStatus = "Đang thu âm Speaking..."
+                                            },
+                                            onPartial = { speakingStatus = "Đang nghe: \"$it\"" },
+                                            onResult = { spoken ->
+                                                isRecordingSpeaking = false
+                                                speakingStatus = "Đã ghi nhận giọng nói."
+                                                speakingTranscript = if (speakingTranscript.isBlank()) spoken else "${speakingTranscript.trim()} $spoken"
+                                            },
+                                            onError = { err ->
+                                                isRecordingSpeaking = false
+                                                speakingStatus = err
+                                            }
+                                        )
+                                    } else {
+                                        micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                    }
+                                }
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isRecordingSpeaking) RoseAlert else CdIeltsTopbar
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .minimumInteractiveComponentSize()
+                        ) {
+                            Icon(
+                                imageVector = if (isRecordingSpeaking) Icons.Rounded.Stop else Icons.Rounded.Mic,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(if (isRecordingSpeaking) "Dừng thu âm Speaking" else "Bắt đầu thu âm trả lời")
+                        }
+
+                        speakingStatus?.let { msg ->
+                            Text(msg, style = MaterialTheme.typography.bodySmall, color = secondaryText)
+                        }
+
+                        OutlinedTextField(
+                            value = speakingTranscript,
+                            onValueChange = { speakingTranscript = it },
+                            minLines = 4,
+                            placeholder = { Text("Transcript câu trả lời Speaking...", color = secondaryText) },
+                            textStyle = MaterialTheme.typography.bodyMedium.copy(
+                                fontFamily = PlusJakartaSansFontFamily,
+                                fontSize = (14f * fontScale).sp,
+                                color = primaryText
+                            ),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = borderColor,
+                                unfocusedBorderColor = borderColor,
+                                focusedContainerColor = cardBg,
+                                unfocusedContainerColor = cardBg
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
             }
         }
 
@@ -1133,28 +1279,33 @@ fun MockExamScreen(
             if (layoutInfo.useSideBySideSplit) {
                 // SIDE-BY-SIDE LEFT/RIGHT SPLIT PANES (Tablets / Medium / Expanded / Landscape)
                 Row(modifier = Modifier.fillMaxSize()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .weight(splitRatio)
-                            .background(pageBg)
-                            .verticalScroll(rememberScrollState())
-                            .padding(horizontal = paneHorizontalPadding, vertical = 10.dp)
-                            .testTag("exam_top_pane")
-                    ) {
-                        primaryPaneContent()
+                    if (!isPassageCollapsed) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .weight(splitRatio)
+                                .background(pageBg)
+                                .verticalScroll(rememberScrollState())
+                                .padding(horizontal = paneHorizontalPadding, vertical = 8.dp)
+                                .testTag("exam_top_pane")
+                        ) {
+                            primaryPaneContent()
+                        }
                     }
 
-                    // Draggable vertical divider handle
+                    // Draggable vertical divider handle + 1-tap collapse button
                     Box(
                         modifier = Modifier
                             .fillMaxHeight()
                             .width(24.dp)
                             .background(splitHandleBg)
+                            .clickable { isPassageCollapsed = !isPassageCollapsed }
                             .pointerInput(totalWidthPx) {
                                 detectHorizontalDragGestures { change, dragAmount ->
                                     change.consume()
-                                    splitRatio = (splitRatio + dragAmount / totalWidthPx).coerceIn(0.28f, 0.72f)
+                                    if (!isPassageCollapsed) {
+                                        splitRatio = (splitRatio + dragAmount / totalWidthPx).coerceIn(0.28f, 0.72f)
+                                    }
                                 }
                             }
                             .testTag("exam_split_drag_handle"),
@@ -1172,73 +1323,99 @@ fun MockExamScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxHeight()
-                            .weight(1f - splitRatio)
+                            .weight(if (isPassageCollapsed) 1f else 1f - splitRatio)
                             .background(pageBg)
                             .then(secondaryInsetModifier)
-                            .verticalScroll(rememberScrollState())
-                            .padding(horizontal = paneHorizontalPadding, vertical = 10.dp)
+                            .padding(horizontal = paneHorizontalPadding, vertical = 8.dp)
                             .testTag("exam_bottom_pane")
                     ) {
                         secondaryPaneContent()
                     }
                 }
             } else {
-                // PROPORTIONAL VERTICAL SPLIT-SCREEN (Compact Portrait: 16:9, 18:9, 19.5:9, 20:9, 21:9)
+                // PROPORTIONAL VERTICAL SPLIT-SCREEN WITH 1-TAP PASSAGE COLLAPSE (Compact Portrait)
                 Column(modifier = Modifier.fillMaxSize()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(splitRatio)
-                            .background(pageBg)
-                            .verticalScroll(rememberScrollState())
-                            .padding(horizontal = paneHorizontalPadding, vertical = 10.dp)
-                            .testTag("exam_top_pane")
-                    ) {
-                        primaryPaneContent()
+                    if (!isPassageCollapsed) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(splitRatio)
+                                .background(pageBg)
+                                .verticalScroll(rememberScrollState())
+                                .padding(horizontal = paneHorizontalPadding, vertical = 8.dp)
+                                .testTag("exam_top_pane")
+                        ) {
+                            primaryPaneContent()
+                        }
                     }
 
-                    Box(
+                    // Compact Draggable Split Bar + 1-Tap "Thu gọn / Mở bài" toggle
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(26.dp)
+                            .height(28.dp)
                             .background(splitHandleBg)
                             .pointerInput(totalHeightPx) {
                                 detectVerticalDragGestures { change, dragAmount ->
                                     change.consume()
-                                    splitRatio = (splitRatio + dragAmount / totalHeightPx).coerceIn(0.25f, 0.75f)
+                                    if (!isPassageCollapsed) {
+                                        splitRatio = (splitRatio + dragAmount / totalHeightPx).coerceIn(0.24f, 0.74f)
+                                    }
                                 }
                             }
+                            .padding(horizontal = 12.dp)
                             .testTag("exam_split_drag_handle"),
-                        contentAlignment = Alignment.Center
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        Icon(
+                            imageVector = Icons.Rounded.DragHandle,
+                            contentDescription = "Kéo chỉnh tỷ lệ",
+                            tint = secondaryText,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Surface(
+                            shape = RoundedCornerShape(50),
+                            color = cardBg,
+                            border = BorderStroke(1.dp, borderColor),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(50))
+                                .clickable { isPassageCollapsed = !isPassageCollapsed }
+                                .testTag("exam_toggle_passage_collapse")
                         ) {
-                            Icon(
-                                imageVector = Icons.Rounded.DragHandle,
-                                contentDescription = "Kéo để thay đổi tỷ lệ màn hình trên dưới",
-                                tint = secondaryText,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Text(
-                                text = "Kéo lên / xuống để chỉnh tỷ lệ",
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                                color = secondaryText,
-                                maxLines = 1,
-                                softWrap = false
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                modifier = Modifier.padding(horizontal = 9.dp, vertical = 2.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (isPassageCollapsed) Icons.Rounded.ExpandMore else Icons.Rounded.ExpandLess,
+                                    contentDescription = if (isPassageCollapsed) "Mở đề bài" else "Thu gọn đề bài",
+                                    tint = primaryText,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = if (isPassageCollapsed) "Mở đề bài" else "Thu gọn bài",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 10.5.sp
+                                    ),
+                                    color = primaryText,
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                            }
                         }
+                        Spacer(modifier = Modifier.width(18.dp))
                     }
 
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .weight(1f - splitRatio)
+                            .weight(if (isPassageCollapsed) 1f else 1f - splitRatio)
                             .background(pageBg)
                             .then(secondaryInsetModifier)
-                            .verticalScroll(rememberScrollState())
-                            .padding(horizontal = paneHorizontalPadding, vertical = 10.dp)
+                            .padding(horizontal = paneHorizontalPadding, vertical = 6.dp)
                             .testTag("exam_bottom_pane")
                     ) {
                         secondaryPaneContent()
@@ -1247,103 +1424,43 @@ fun MockExamScreen(
             }
         }
 
-        // BOTTOM HORIZONTAL QUESTION PALETTE (Answered / Unanswered / Flagged)
-        if (sectionQuestions.isNotEmpty()) {
-            Surface(
-                color = paletteBg,
-                border = BorderStroke(1.dp, borderColor),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .navigationBarsPadding()
-                    .imePadding()
-                    .testTag("exam_question_palette")
-            ) {
-                Column(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        val answeredCount = sectionQuestions.count { answersMap[it.id]?.isNotBlank() == true }
-                        val flaggedCount = sectionQuestions.count { flaggedIds[it.id] == true }
-                        Text(
-                            text = "Đã làm: $answeredCount/${sectionQuestions.size} • Cắm cờ: $flaggedCount",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = secondaryText
-                        )
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            PaletteLegendDot(selectedAccentBg, "Đã làm", secondaryText)
-                            PaletteLegendDot(GoldMastery, "Cờ", secondaryText)
-                        }
-                    }
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        sectionQuestions.forEachIndexed { idx, q ->
-                            val isCurrent = idx == activeQuestionIndex
-                            val isAnswered = answersMap[q.id]?.isNotBlank() == true
-                            val isFlagged = flaggedIds[q.id] == true
-
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(
-                                        when {
-                                            isCurrent -> Color(0xFF2563EB)
-                                            isAnswered -> selectedAccentBg
-                                            else -> cardBg
-                                        }
-                                    )
-                                    .clickable { activeQuestionIndex = idx }
-                                    .testTag("exam_palette_q_${q.number}"),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Surface(
-                                    shape = RoundedCornerShape(10.dp),
-                                    color = Color.Transparent,
-                                    border = BorderStroke(
-                                        width = if (isFlagged || isCurrent) 2.dp else 1.dp,
-                                        color = when {
-                                            isFlagged -> GoldMastery
-                                            isCurrent -> Color(0xFF93C5FD)
-                                            else -> borderColor
-                                        }
-                                    ),
-                                    modifier = Modifier.fillMaxSize()
-                                ) {}
-
-                                Text(
-                                    text = "${q.number}",
-                                    style = MaterialTheme.typography.labelMedium.copy(
-                                        fontFamily = PlusJakartaSansFontFamily,
-                                        fontWeight = FontWeight.Bold
-                                    ),
-                                    color = if (isCurrent || isAnswered) Color.White else primaryText
-                                )
-
-                                if (isFlagged) {
-                                    Box(
-                                        modifier = Modifier
-                                            .align(Alignment.TopEnd)
-                                            .padding(3.dp)
-                                            .size(8.dp)
-                                            .clip(CircleShape)
-                                            .background(GoldMastery)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
+        // STICKY LIVE QUESTION NAVIGATOR BAR + OVERVIEW GRID (Authentic CD-IELTS Palette)
+        if (isObjectiveSection && sectionQuestions.isNotEmpty()) {
+            val examStatusItems = sectionQuestions.map { q ->
+                QuestionStatusItem(
+                    id = q.id,
+                    number = q.number,
+                    previewText = q.promptEn,
+                    answerSummary = answersMap[q.id]?.takeIf { it.isNotBlank() },
+                    isFlagged = flaggedIds[q.id] == true
+                )
             }
+            val cdNavPalette = QuestionNavigatorPalette(
+                barBg = paletteBg,
+                cardBg = cardBg,
+                neutralChipBg = cardBg,
+                borderColor = borderColor,
+                primaryAccent = if (visualMode == CdIeltsVisualMode.HIGH_CONTRAST) Color(0xFF2563EB) else Color(0xFF2563EB),
+                primaryText = primaryText,
+                secondaryText = secondaryText,
+                answeredBg = EmeraldSuccess,
+                answeredText = Color.White,
+                flagAccent = GoldMastery
+            )
+            QuestionNavigatorBar(
+                items = examStatusItems,
+                activeIndex = activeQuestionIndex,
+                onSelectQuestion = { idx ->
+                    if (expandAllQuestions) expandAllQuestions = false
+                    jumpToExamQuestion(idx)
+                },
+                palette = cdNavPalette,
+                expandAll = expandAllQuestions,
+                onToggleExpandAll = { expandAllQuestions = !expandAllQuestions },
+                showNavBarInset = true,
+                testTagPrefix = "exam_question_palette",
+                modifier = Modifier.imePadding()
+            )
         } else {
             Spacer(modifier = Modifier.navigationBarsPadding())
         }
@@ -1461,10 +1578,9 @@ fun MockExamScreen(
 }
 
 @Composable
-private fun CdIeltsQuestionPane(
+private fun CdIeltsQuestionBody(
     question: ExamQuestionItem,
     answerValue: String,
-    isFlagged: Boolean,
     hasPrev: Boolean,
     hasNext: Boolean,
     fontScale: Float,
@@ -1472,78 +1588,22 @@ private fun CdIeltsQuestionPane(
     borderColor: Color,
     primaryText: Color,
     secondaryText: Color,
+    selectedAccentBg: Color,
     onAnswerChange: (String) -> Unit,
-    onToggleFlag: () -> Unit,
     onPrev: () -> Unit,
     onNext: () -> Unit
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = CdIeltsTopbar
-            ) {
-                Text(
-                    text = "Question ${question.number} • ${question.type.labelVi}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color.White,
-                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
-                )
-            }
-
-            val isDarkCard = cardBg != LightApexColors.cdIeltsCard
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = when {
-                    isFlagged && isDarkCard -> Color(0xFF3A2910)
-                    isFlagged -> Color(0xFFFEF3C7)
-                    else -> cardBg
-                },
-                border = BorderStroke(1.dp, if (isFlagged) GoldMastery else borderColor),
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable(onClick = onToggleFlag)
-                    .testTag("exam_flag_q_${question.number}")
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp)
-                ) {
-                    val flagTint = when {
-                        isFlagged && isDarkCard -> Color(0xFFFCD34D)
-                        isFlagged -> Color(0xFFB45309)
-                        else -> secondaryText
-                    }
-                    Icon(
-                        imageVector = if (isFlagged) Icons.Rounded.Flag else Icons.Rounded.OutlinedFlag,
-                        contentDescription = "Cắm cờ câu hỏi",
-                        tint = flagTint,
-                        modifier = Modifier.size(15.dp)
-                    )
-                    Text(
-                        text = if (isFlagged) "Đã cắm cờ" else "Cắm cờ (Flag)",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (isFlagged) flagTint else primaryText
-                    )
-                }
-            }
-        }
-
         Text(
             text = question.promptEn,
             style = MaterialTheme.typography.bodyMedium.copy(
                 fontFamily = PlusJakartaSansFontFamily,
                 fontWeight = FontWeight.SemiBold,
-                fontSize = (15f * fontScale).sp,
-                lineHeight = (22f * fontScale).sp
+                fontSize = (14.5f * fontScale).sp,
+                lineHeight = (21f * fontScale).sp
             ),
             color = primaryText
         )
@@ -1553,7 +1613,7 @@ private fun CdIeltsQuestionPane(
                 value = answerValue,
                 onValueChange = onAnswerChange,
                 singleLine = true,
-                placeholder = { Text("Nhập đáp án điền từ...", color = secondaryText) },
+                placeholder = { Text("Nhập đáp án...", color = secondaryText) },
                 textStyle = MaterialTheme.typography.bodyMedium.copy(
                     fontFamily = PlusJakartaSansFontFamily,
                     fontSize = (14.5f * fontScale).sp,
@@ -1571,13 +1631,13 @@ private fun CdIeltsQuestionPane(
                     .testTag("exam_gap_input_${question.number}")
             )
         } else {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
                 question.options.forEach { option ->
                     val selected = answerValue.equals(option, ignoreCase = true)
                     Surface(
                         shape = RoundedCornerShape(10.dp),
-                        color = if (selected) CdIeltsTopbar else cardBg,
-                        border = BorderStroke(1.dp, if (selected) CdIeltsTopbar else borderColor),
+                        color = if (selected) selectedAccentBg else cardBg,
+                        border = BorderStroke(1.dp, if (selected) selectedAccentBg else borderColor),
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(10.dp))
@@ -1592,7 +1652,7 @@ private fun CdIeltsQuestionPane(
                                 fontSize = (14f * fontScale).sp
                             ),
                             color = if (selected) Color.White else primaryText,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 11.dp)
+                            modifier = Modifier.padding(horizontal = 11.dp, vertical = 10.dp)
                         )
                     }
                 }
@@ -1606,22 +1666,24 @@ private fun CdIeltsQuestionPane(
             OutlinedButton(
                 onClick = onPrev,
                 enabled = hasPrev,
-                shape = RoundedCornerShape(10.dp),
-                border = BorderStroke(1.dp, borderColor)
+                shape = RoundedCornerShape(9.dp),
+                border = BorderStroke(1.dp, borderColor),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
             ) {
-                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = null, modifier = Modifier.size(16.dp))
+                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = null, modifier = Modifier.size(15.dp))
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("Câu trước", color = primaryText)
+                Text("Câu trước", style = MaterialTheme.typography.labelMedium, color = primaryText)
             }
             OutlinedButton(
                 onClick = onNext,
                 enabled = hasNext,
-                shape = RoundedCornerShape(10.dp),
-                border = BorderStroke(1.dp, borderColor)
+                shape = RoundedCornerShape(9.dp),
+                border = BorderStroke(1.dp, borderColor),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
             ) {
-                Text("Câu tiếp", color = primaryText)
+                Text("Câu tiếp", style = MaterialTheme.typography.labelMedium, color = primaryText)
                 Spacer(modifier = Modifier.width(4.dp))
-                Icon(Icons.AutoMirrored.Rounded.ArrowForward, contentDescription = null, modifier = Modifier.size(16.dp))
+                Icon(Icons.AutoMirrored.Rounded.ArrowForward, contentDescription = null, modifier = Modifier.size(15.dp))
             }
         }
     }

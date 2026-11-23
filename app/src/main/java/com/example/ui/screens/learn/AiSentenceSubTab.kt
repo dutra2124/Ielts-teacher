@@ -94,14 +94,14 @@ fun AiSentenceSubTab(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+            .padding(horizontal = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         // Horizontal Target Word Picker
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(
-                text = "Chọn từ mục tiêu C1–C2 để đặt câu:",
-                style = MaterialTheme.typography.titleSmall,
+                text = "Từ mục tiêu:",
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                 color = InkSecondary
             )
             Row(
